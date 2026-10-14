@@ -1182,6 +1182,556 @@ async function loadTripHistory() {
    BILLING
    ========================================================= */
 
+async function payForTrip(tripID, button) {
+    if (!window.Razorpay) {
+        alert("Razorpay Checkout could not load. Please refresh and try again.");
+        return;
+    }
+
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "Opening checkout...";
+
+    try {
+        const order = await apiRequest("/api/payments/order", {
+            method: "POST",
+            body: JSON.stringify({ tripID })
+        });
+
+        const checkout = new window.Razorpay({
+            key: order.keyId,
+            amount: order.amount,
+            currency: order.currency,
+            name: "FleetFlow",
+            description: `Invoice ${order.invoiceNumber}`,
+            order_id: order.orderId,
+            prefill: {
+                name: order.customerName,
+                email: order.customerEmail
+            },
+            theme: {
+                color: "#2563eb"
+            },
+            handler: async function (response) {
+                try {
+                    const result = await apiRequest("/api/payments/verify", {
+                        method: "POST",
+                        body: JSON.stringify({
+                            invoiceId: order.invoiceId,
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature
+                        })
+                    });
+
+                    if (result.status === "PAID") {
+                        alert("Payment successful! Your invoice is marked as PAID.");
+                    }
+
+                    await loadBilling();
+                } catch (error) {
+                    alert(
+                        "Payment verification is pending. Do not pay again yet. " +
+                        "Please refresh Billing and check the payment status."
+                    );
+                    console.error("Payment verification failed:", error);
+                }
+            },
+            modal: {
+                ondismiss: function () {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+            }
+        });
+
+        checkout.on("payment.failed", function (response) {
+            console.error("Razorpay payment failed:", response.error);
+            alert("Payment failed. Please try again.");
+            button.disabled = false;
+            button.textContent = originalText;
+        });
+
+        checkout.open();
+    } catch (error) {
+        alert("Unable to start payment: " + error.message);
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
+
+
+async function downloadInvoicePdf(tripID, button) {
+    if (!window.jspdf?.jsPDF) {
+        alert("PDF library could not load. Please refresh the page and try again.");
+        return;
+    }
+
+    const originalText = button?.textContent || "Download Invoice PDF";
+
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Generating PDF...";
+    }
+
+    try {
+        // Fetch existing records only. No database changes are made.
+        const trips = await getCurrentUserTrips();
+        const trip = trips.find(item => item.ID === tripID);
+
+        if (!trip || trip.status !== "COMPLETED") {
+            throw new Error("A completed trip is required to generate an invoice.");
+        }
+
+        const invoiceResponse = await apiRequest(
+            `${API_BASE}/payment/Invoices`
+        );
+
+        const invoices = invoiceResponse?.value || [];
+        const invoice = invoices.find(item => item.trip_ID === tripID);
+
+        const customerName = [
+            currentUser?.firstName,
+            currentUser?.lastName
+        ].filter(Boolean).join(" ") ||
+            currentUser?.email ||
+            "FleetFlow Customer";
+
+        const invoiceNumber = invoice?.invoiceNumber || `FF-${trip.ID}`;
+        const paymentStatus = String(invoice?.status || "UNPAID").toUpperCase();
+
+        const actualDistance = Number(trip.actualDistance) || 0;
+        const rate = Number(trip.ratePerKM) || 0;
+        const calculatedCharge = actualDistance * rate;
+
+        // Prefer the persisted invoice amount, then the completed trip charge.
+        const finalAmount = Number(
+            invoice?.amount ?? trip.finalPrice ?? calculatedCharge
+        );
+
+        const vehicle = trip.vehicle
+            ? [
+                trip.vehicle.brand,
+                trip.vehicle.model,
+                trip.vehicle.registrationNumber
+            ].filter(Boolean).join(" ")
+            : "Not specified";
+
+        const registrationNumber =
+            trip.vehicle?.registrationNumber || "Not specified";
+
+        const formatCurrency = amount =>
+            "INR " + Number(amount || 0).toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+
+        const formatDate = value => {
+            if (!value) return "N/A";
+
+            // Avoid timezone shifts for date-only values such as YYYY-MM-DD.
+            const raw = String(value);
+            const date = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+                ? new Date(raw + "T00:00:00")
+                : new Date(raw);
+
+            return Number.isNaN(date.getTime())
+                ? raw
+                : date.toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric"
+                });
+        };
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF("p", "mm", "a4");
+
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 14;
+        const contentWidth = pageWidth - margin * 2;
+        let y = 0;
+
+        // FleetFlow brand palette.
+        const navy = [22, 42, 75];
+        const blue = [37, 99, 235];
+        const lightBlue = [239, 246, 255];
+        const lightGray = [245, 247, 250];
+        const gray = [91, 100, 115];
+        const dark = [35, 43, 55];
+        const green = [22, 128, 75];
+        const red = [185, 45, 45];
+        const border = [220, 226, 234];
+
+        const setText = (color = dark) => pdf.setTextColor(...color);
+
+        const drawSectionTitle = title => {
+            pdf.setFillColor(...lightBlue);
+            pdf.roundedRect(margin, y, contentWidth, 8, 1.5, 1.5, "F");
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(9);
+            setText(navy);
+            pdf.text(title.toUpperCase(), margin + 3, y + 5.3);
+            y += 13;
+        };
+
+        const drawLabelValue = (label, value, x, valueX, maxWidth = 60) => {
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(8.5);
+            setText(gray);
+            pdf.text(label, x, y);
+
+            pdf.setFont("helvetica", "bold");
+            setText(dark);
+
+            const lines = pdf.splitTextToSize(
+                String(value ?? "N/A"),
+                maxWidth
+            );
+            pdf.text(lines, valueX, y);
+            return Math.max(5, lines.length * 4.2);
+        };
+
+        const ensureSpace = needed => {
+            if (y + needed > pageHeight - 17) {
+                pdf.addPage();
+                y = 18;
+            }
+        };
+
+        const safeText = value => String(value ?? "N/A");
+
+        // ---------- HEADER ----------
+        pdf.setFillColor(...navy);
+        pdf.rect(0, 0, pageWidth, 38, "F");
+
+        pdf.setFillColor(...blue);
+        pdf.rect(0, 35, pageWidth, 3, "F");
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(23);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text("FLEETFLOW", margin, 17);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(220, 230, 245);
+        pdf.text("FLEET & VEHICLE MANAGEMENT SYSTEM", margin, 24);
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(16);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text("TRIP INVOICE", pageWidth - margin, 17, {
+            align: "right"
+        });
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8);
+        pdf.setTextColor(220, 230, 245);
+        pdf.text("OFFICIAL BILLING DOCUMENT", pageWidth - margin, 24, {
+            align: "right"
+        });
+
+        // ---------- INVOICE SUMMARY ----------
+        y = 47;
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(8);
+        setText(gray);
+        pdf.text("INVOICE NUMBER", margin, y);
+        pdf.text("INVOICE DATE", pageWidth / 2 + 5, y);
+
+        y += 6;
+        pdf.setFontSize(11);
+        setText(navy);
+        pdf.text(invoiceNumber, margin, y);
+        pdf.text(formatDate(new Date()), pageWidth / 2 + 5, y);
+
+        y += 8;
+        pdf.setDrawColor(...border);
+        pdf.line(margin, y, pageWidth - margin, y);
+        y += 9;
+
+        // ---------- CUSTOMER DETAILS ----------
+        drawSectionTitle("Bill To");
+
+        const leftX = margin + 1;
+        const rightX = pageWidth / 2 + 5;
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(11);
+        setText(dark);
+        pdf.text(customerName, leftX, y);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8.5);
+        setText(gray);
+        pdf.text(safeText(currentUser?.email || "N/A"), leftX, y + 6);
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(8);
+        setText(gray);
+        pdf.text("DOCUMENT TYPE", rightX, y - 1);
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9);
+        setText(dark);
+        pdf.text("Completed Trip Invoice", rightX, y + 5);
+
+        y += 17;
+
+        // ---------- TRIP DETAILS ----------
+        drawSectionTitle("Trip Details");
+
+        const col1 = margin + 2;
+        const col2 = pageWidth / 2 + 4;
+        const valueOffset = 29;
+        const valueOffset2 = 29;
+        const valueWidth = 47;
+
+        const tripRows = [
+            [
+                ["Trip ID", trip.ID],
+                ["Trip Date", formatDate(trip.tripDate)]
+            ],
+            [
+                ["Pickup", trip.startLocation || "N/A"],
+                ["Destination", trip.endLocation || "N/A"]
+            ],
+            [
+                ["Vehicle", vehicle],
+                ["Registration", registrationNumber]
+            ],
+            [
+                ["Starting Odometer", trip.startMeter ?? "N/A"],
+                ["Ending Odometer", trip.endMeter ?? "N/A"]
+            ],
+            [
+                ["Actual Distance", `${actualDistance.toLocaleString("en-IN")} km`],
+                ["Rate per KM", formatCurrency(rate)]
+            ]
+        ];
+
+        for (const row of tripRows) {
+            ensureSpace(11);
+
+            const firstHeight = drawLabelValue(
+                row[0][0],
+                row[0][1],
+                col1,
+                col1 + valueOffset,
+                valueWidth
+            );
+
+            const secondHeight = drawLabelValue(
+                row[1][0],
+                row[1][1],
+                col2,
+                col2 + valueOffset2,
+                valueWidth
+            );
+
+            y += Math.max(firstHeight, secondHeight) + 3;
+        }
+
+        y += 2;
+
+        // ---------- BILLING BREAKDOWN ----------
+        drawSectionTitle("Billing Breakdown");
+
+        const tableX = margin;
+        const tableW = contentWidth;
+        const labelX = tableX + 4;
+        const amountX = tableX + tableW - 4;
+
+        pdf.setFillColor(...lightGray);
+        pdf.roundedRect(tableX, y - 2, tableW, 9, 1, 1, "F");
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(8.5);
+        setText(navy);
+        pdf.text("DESCRIPTION", labelX, y + 3.5);
+        pdf.text("AMOUNT", amountX, y + 3.5, { align: "right" });
+
+        y += 12;
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+        setText(dark);
+        pdf.text(
+            `Trip distance charge (${actualDistance} km x ${formatCurrency(rate)}/km)`,
+            labelX,
+            y
+        );
+        pdf.text(formatCurrency(calculatedCharge), amountX, y, {
+            align: "right"
+        });
+
+        y += 5;
+        pdf.setDrawColor(...border);
+        pdf.line(tableX, y, tableX + tableW, y);
+
+        y += 8;
+
+        // The stored invoice/trip total remains authoritative.
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+        setText(gray);
+        pdf.text("Subtotal", amountX - 52, y);
+        pdf.text(formatCurrency(calculatedCharge), amountX, y, {
+            align: "right"
+        });
+
+        y += 7;
+        pdf.text("Adjustments", amountX - 52, y);
+        pdf.text(
+            formatCurrency(finalAmount - calculatedCharge),
+            amountX,
+            y,
+            { align: "right" }
+        );
+
+        y += 3;
+        pdf.setDrawColor(...border);
+        pdf.line(amountX - 57, y, amountX, y);
+
+        y += 9;
+        pdf.setFillColor(...navy);
+        pdf.roundedRect(tableX, y - 5, tableW, 17, 2, 2, "F");
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(10);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text("TOTAL AMOUNT", tableX + 4, y + 1.5);
+
+        pdf.setFontSize(13);
+        pdf.text(formatCurrency(finalAmount), amountX - 4, y + 1.5, {
+            align: "right"
+        });
+
+        y += 20;
+
+        // ---------- PAYMENT STATUS ----------
+        drawSectionTitle("Payment Information");
+
+        const isPaid = paymentStatus === "PAID";
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+        setText(gray);
+        pdf.text("Payment Status", margin + 2, y + 1);
+
+        const badgeText = paymentStatus.replace(/_/g, " ");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(8.5);
+
+        const badgeWidth = pdf.getTextWidth(badgeText) + 10;
+        pdf.setFillColor(
+            ...(isPaid ? [225, 247, 235] : [255, 242, 220])
+        );
+        pdf.roundedRect(margin + 39, y - 4, badgeWidth, 8, 2, 2, "F");
+
+        setText(isPaid ? green : red);
+        pdf.text(badgeText, margin + 44, y + 1);
+
+        y += 11;
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8);
+        setText(gray);
+        pdf.text(
+            isPaid
+                ? "Payment is recorded as paid in FleetFlow."
+                : "Payment is not marked as paid in FleetFlow.",
+            margin + 2,
+            y
+        );
+
+        y += 14;
+
+        // ---------- SIGNATURES ----------
+        ensureSpace(32);
+        drawSectionTitle("Acknowledgement & Authorization");
+
+        const signatureGap = 15;
+        const signatureWidth = (contentWidth - signatureGap) / 2;
+        const signatureY = y + 13;
+
+        pdf.setDrawColor(...gray);
+        pdf.line(
+            margin + 2,
+            signatureY,
+            margin + 2 + signatureWidth - 5,
+            signatureY
+        );
+
+        pdf.line(
+            margin + signatureWidth + signatureGap,
+            signatureY,
+            pageWidth - margin - 2,
+            signatureY
+        );
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(8);
+        setText(dark);
+        pdf.text("Customer Acknowledgement", margin + 2, signatureY + 5);
+        pdf.text(
+            "Authorized Signature",
+            margin + signatureWidth + signatureGap,
+            signatureY + 5
+        );
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(7.5);
+        setText(gray);
+        pdf.text("Name / Date", margin + 2, signatureY + 10);
+        pdf.text("FleetFlow Representative / Date",
+            margin + signatureWidth + signatureGap,
+            signatureY + 10
+        );
+
+        // ---------- FOOTER ----------
+        const footerY = pageHeight - 12;
+
+        pdf.setDrawColor(...border);
+        pdf.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(7.5);
+        setText(gray);
+        pdf.text(
+            "FleetFlow | Fleet & Vehicle Management System",
+            margin,
+            footerY
+        );
+        pdf.text(
+            "Generated electronically",
+            pageWidth - margin,
+            footerY,
+            { align: "right" }
+        );
+
+        const safeName = String(invoiceNumber)
+            .replace(/[^a-zA-Z0-9_-]/g, "_");
+
+        pdf.save(`${safeName}.pdf`);
+
+    } catch (error) {
+        console.error("Invoice PDF generation failed:", error);
+        alert("Unable to generate invoice PDF: " + error.message);
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+    }
+}
+
+
+
 async function loadBilling() {
     const list = document.getElementById("billingList");
     const summary = document.getElementById("billingSummary");
@@ -1193,9 +1743,21 @@ async function loadBilling() {
 
     try {
         const trips = await getCurrentUserTrips();
-
         const completed = trips.filter(
             trip => trip.status === "COMPLETED"
+        );
+
+        const invoiceData = await apiRequest(
+            `${API_BASE}/payment/Invoices`
+        );
+        const invoices = invoiceData?.value || [];
+
+        const myInvoices = invoices.filter(invoice =>
+            completed.some(trip => trip.ID === invoice.trip_ID)
+        );
+
+        const invoiceByTrip = new Map(
+            myInvoices.map(invoice => [invoice.trip_ID, invoice])
         );
 
         const totalDistance = completed.reduce(
@@ -1205,11 +1767,6 @@ async function loadBilling() {
 
         const totalBilled = completed.reduce(
             (sum, trip) => sum + (Number(trip.finalPrice) || 0),
-            0
-        );
-
-        const totalEstimated = completed.reduce(
-            (sum, trip) => sum + (Number(trip.estimatedPrice) || 0),
             0
         );
 
@@ -1244,6 +1801,10 @@ async function loadBilling() {
             const rate = trip.ratePerKM == null
                 ? 15
                 : Number(trip.ratePerKM);
+
+            const invoice = invoiceByTrip.get(trip.ID);
+            const paid = invoice?.status === "PAID";
+            const paymentStatus = paid ? "PAID" : "UNPAID";
 
             return `
                 <div class="vehicle-card billing-card">
@@ -1297,7 +1858,35 @@ async function loadBilling() {
                         </div>
                     </div>
 
-                    <span class="status status-completed">COMPLETED</span>
+                    <p><strong>Invoice:</strong>
+                        ${escapeHtml(invoice?.invoiceNumber || "Trip invoice")}
+                    </p>
+
+                    <p><strong>Payment Status:</strong>
+                        <span class="status ${paid
+                            ? "status-completed"
+                            : "status-pending"}">
+                            ${paymentStatus}
+                        </span>
+                    </p>
+
+                    ${paid ? `
+                        <p>Your payment has been confirmed.</p>
+                    ` : `
+                        <button
+                            type="button"
+                            class="primary-btn"
+                            onclick="payForTrip('${escapeHtml(trip.ID)}', this)">
+                            Pay Now
+                        </button>
+                    `}
+
+                    <button
+                        type="button"
+                        class="primary-btn"
+                        onclick="downloadInvoicePdf('${escapeHtml(trip.ID)}', this)">
+                        Download Invoice PDF
+                    </button>
                 </div>
             `;
         }).join("");
@@ -1307,11 +1896,15 @@ async function loadBilling() {
 
         list.innerHTML = `
             <div class="error-message">
-                Failed to load billing details: ${escapeHtml(error.message)}
+                Failed to load billing details:
+                ${escapeHtml(error.message)}
             </div>
         `;
     }
 }
+
+
+
 function getTripStatusClass(status) {
     switch (status) {
         case "AVAILABLE":

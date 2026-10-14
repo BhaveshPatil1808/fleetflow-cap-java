@@ -1,4 +1,6 @@
-
+razorpay:
+  key-id: rzp_test_TngTHpNGuX9eyW
+  key-secret: nbAdn29sz8i2GU8IOVe0trQU
 spring:
   config:
     activate:
@@ -22,8 +24,9 @@ spring:
 
 logging:
   level:
-    com.sap.cds.security.authentication: DEBUG
-    com.sap.cds.properties: DEBUG
+    com.sap.cds: DEBUG
+    org.springframework.jdbc: DEBUG
+    org.sqlite: DEBUG
 
 cds:
   data-source:

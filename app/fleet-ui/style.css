@@ -717,3 +717,53 @@ body {
     opacity: 0.65;
     cursor: not-allowed;
 }
+
+.auth-switch {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 14px;
+}
+
+.text-btn {
+    background: none;
+    border: none;
+    color: #2563eb;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 6px;
+}
+
+.text-btn:hover {
+    text-decoration: underline;
+}
+
+#registerForm h2,
+#loginForm h2 {
+    margin-bottom: 8px;
+}
+
+#registerForm > p,
+#loginForm > p {
+    line-height: 1.5;
+}
+
+#registerForm .form-group,
+#loginForm .form-group {
+    margin-bottom: 14px;
+}
+
+#registerForm input,
+#registerForm select,
+#loginForm input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#registerForm .error-message:empty,
+#loginForm .error-message:empty {
+    display: none;
+}
+
+#registerForm .success-message.hidden {
+    display: none;
+}

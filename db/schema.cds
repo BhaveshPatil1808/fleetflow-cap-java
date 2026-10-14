@@ -148,3 +148,32 @@ entity UserCredentials : cuid, managed {
     user         : Association to Users not null;
     passwordHash : String(100) not null;
 }
+
+
+
+
+/* =========================================================
+   INVOICES
+   ========================================================= */
+
+entity Invoices : cuid, managed {
+    invoiceNumber : String(40) not null;
+    trip           : Association to Trips not null;
+    billedTo       : Association to Users not null;
+    amount         : Decimal(12,2) not null;
+    currency       : String(3) not null default 'INR';
+    status         : String(20) not null default 'UNPAID';
+}
+
+/* =========================================================
+   PAYMENTS
+   ========================================================= */
+
+entity Payments : cuid, managed {
+    invoice            : Association to Invoices not null;
+    razorpayOrderId    : String(100);
+    razorpayPaymentId  : String(100);
+    amount             : Decimal(12,2) not null;
+    currency           : String(3) not null default 'INR';
+    status             : String(20) not null default 'CREATED';
+}

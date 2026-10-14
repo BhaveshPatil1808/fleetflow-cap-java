@@ -11,33 +11,141 @@
 <body>
 
 <!-- ==================== LOGIN PAGE ==================== -->
+
+<!-- ==================== LOGIN / SIGNUP PAGE ==================== -->
 <div id="loginPage" class="login-page">
     <div class="login-card">
         <div class="logo">FleetFlow</div>
         <p class="login-subtitle">Fleet &amp; Vehicle Management System</p>
 
-        <div id="loginError" class="error-message"></div>
+        <!-- LOGIN FORM -->
+        <div id="loginForm">
+            <h2>Welcome Back</h2>
+            <p>Log in to continue to FleetFlow.</p>
 
-        <label for="username">Username</label>
-        <input id="username" type="text" placeholder="Enter username"
-               autocomplete="username">
+            <div id="loginError" class="error-message"></div>
 
-        <label for="password">Password</label>
-        <input id="password" type="password" placeholder="Enter password"
-               autocomplete="current-password">
+            <div class="form-group">
+                <label for="username">Username or Email</label>
+                <input id="username" type="text"
+                       placeholder="Enter username or email"
+                       autocomplete="username">
+            </div>
 
-        <button type="button" class="primary-btn full-width" onclick="login()">
-            Login
-        </button>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input id="password" type="password"
+                       placeholder="Enter password"
+                       autocomplete="current-password">
+            </div>
 
-        <p class="demo-info">
-            Demo users:<br>
-            ADMIN: admin / admin<br>
-            USER: bhavesh / bhavesh<br>
-            DRIVER: rahul / rahul
-        </p>
+            <button type="button" class="primary-btn full-width"
+                    onclick="login()">
+                Login
+            </button>
+
+            <p class="demo-info">
+                <strong>Demo accounts</strong><br>
+                ADMIN: admin / admin<br>
+                USER: bhavesh / bhavesh<br>
+                DRIVER: rahul / rahul
+            </p>
+
+            <p class="auth-switch">
+                Don't have an account?
+                <button type="button" class="text-btn"
+                        onclick="showAuthForm('register')">
+                    Sign Up
+                </button>
+            </p>
+        </div>
+
+        <!-- SIGNUP FORM -->
+        <div id="registerForm" class="hidden">
+            <h2>Create Account</h2>
+            <p>Join FleetFlow today.</p>
+
+            <div id="registerError" class="error-message"></div>
+            <div id="registerSuccess" class="success-message hidden"></div>
+
+            <div class="form-group">
+                <label for="registerFirstName">First Name *</label>
+                <input id="registerFirstName" type="text"
+                       placeholder="Enter first name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="registerLastName">Last Name</label>
+                <input id="registerLastName" type="text"
+                       placeholder="Enter last name">
+            </div>
+
+            <div class="form-group">
+                <label for="registerEmail">Email *</label>
+                <input id="registerEmail" type="email"
+                       placeholder="name@example.com"
+                       autocomplete="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="registerRole">Account Type *</label>
+                <select id="registerRole" onchange="toggleRegistrationFields()">
+                    <option value="USER">User — Book Vehicles</option>
+                    <option value="DRIVER">Driver — Register Vehicles</option>
+                </select>
+            </div>
+
+            <!-- DRIVER-ONLY FIELDS -->
+            <div id="driverRegistrationFields" class="hidden">
+                <div class="form-group">
+                    <label for="registerPhone">Phone Number</label>
+                    <input id="registerPhone" type="tel"
+                           placeholder="Enter phone number">
+                </div>
+
+                <div class="form-group">
+                    <label for="registerLicenseNumber">Driving Licence Number *</label>
+                    <input id="registerLicenseNumber" type="text"
+                           placeholder="Enter licence number">
+                </div>
+
+                <div class="form-group">
+                    <label for="registerLicenseExpiry">Licence Expiry Date</label>
+                    <input id="registerLicenseExpiry" type="date">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="registerPassword">Password *</label>
+                <input id="registerPassword" type="password"
+                       placeholder="Minimum 8 characters"
+                       autocomplete="new-password" required>
+            </div>
+
+            <div class="form-group">
+                <label for="registerConfirmPassword">Confirm Password *</label>
+                <input id="registerConfirmPassword" type="password"
+                       placeholder="Re-enter password"
+                       autocomplete="new-password" required>
+            </div>
+
+            <button id="registerButton" type="button"
+                    class="primary-btn full-width"
+                    onclick="registerAccount()">
+                Create Account
+            </button>
+
+            <p class="auth-switch">
+                Already have an account?
+                <button type="button" class="text-btn"
+                        onclick="showAuthForm('login')">
+                    Back to Login
+                </button>
+            </p>
+        </div>
     </div>
 </div>
+<!-- ==================== END LOGIN / SIGNUP PAGE ==================== -->
 
 <!-- ==================== APPLICATION ==================== -->
 <div id="appPage" class="app-page hidden">
@@ -536,6 +644,9 @@
     </div>
 </div>
 
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+<script src="lib/jspdf.umd.min.js"></script>
 <script src="app.js"></script>
 
 </body>
