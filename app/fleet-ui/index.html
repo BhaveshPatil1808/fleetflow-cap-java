@@ -1,0 +1,542 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FleetFlow | Fleet & Vehicle Management</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<!-- ==================== LOGIN PAGE ==================== -->
+<div id="loginPage" class="login-page">
+    <div class="login-card">
+        <div class="logo">FleetFlow</div>
+        <p class="login-subtitle">Fleet &amp; Vehicle Management System</p>
+
+        <div id="loginError" class="error-message"></div>
+
+        <label for="username">Username</label>
+        <input id="username" type="text" placeholder="Enter username"
+               autocomplete="username">
+
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="Enter password"
+               autocomplete="current-password">
+
+        <button type="button" class="primary-btn full-width" onclick="login()">
+            Login
+        </button>
+
+        <p class="demo-info">
+            Demo users:<br>
+            ADMIN: admin / admin<br>
+            USER: bhavesh / bhavesh<br>
+            DRIVER: rahul / rahul
+        </p>
+    </div>
+</div>
+
+<!-- ==================== APPLICATION ==================== -->
+<div id="appPage" class="app-page hidden">
+
+    <header class="topbar">
+        <div class="brand">FleetFlow</div>
+
+        <div class="user-section">
+            <span id="welcomeUser"></span>
+            <span id="userRole" class="role-badge"></span>
+            <button type="button" class="logout-btn" onclick="logout()">
+                Logout
+            </button>
+        </div>
+    </header>
+
+    <div class="layout">
+
+        <!-- ==================== SIDEBAR ==================== -->
+        <aside class="sidebar">
+
+            <button id="dashboardNav" type="button" class="nav-btn"
+                    onclick="showPage('dashboardPage')">
+                Dashboard
+            </button>
+
+            <button id="vehiclesNav" type="button" class="nav-btn hidden"
+                    onclick="showPage('vehiclesPage'); loadMyVehicles()">
+                My Vehicles
+            </button>
+
+            <button id="availableCarsNav" type="button" class="nav-btn hidden"
+                    onclick="showPage('availableCarsPage'); loadAvailableCars()">
+                Available Cars
+            </button>
+
+            <button id="tripsNav" type="button" class="nav-btn hidden"
+                    onclick="showPage('tripsPage'); loadTrips()">
+                My Trips
+            </button>
+
+            <button id="requestsNav" type="button" class="nav-btn hidden"
+                    onclick="showPage('requestsPage'); loadTripRequests()">
+                Trip Requests
+            </button>
+
+            <button id="tripHistoryNav" type="button" class="nav-btn hidden"
+                    onclick="showPage('tripHistoryPage'); loadTripHistory()">
+                Trip History
+            </button>
+
+            <button id="billingNav" type="button" class="nav-btn hidden"
+                    onclick="showPage('billingPage'); loadBilling()">
+                Billing
+            </button>
+
+        </aside>
+
+        <!-- ==================== MAIN CONTENT ==================== -->
+        <main class="content">
+
+            <!-- DASHBOARD -->
+            <section id="dashboardPage" class="page">
+
+                <div class="page-header">
+                    <div>
+                        <h1>Dashboard</h1>
+                        <p id="dashboardSubtitle">Welcome to FleetFlow</p>
+                    </div>
+                </div>
+
+                <!-- DRIVER DASHBOARD -->
+                <div id="driverDashboard" class="dashboard-content hidden">
+                    <div class="stats-grid">
+
+                        <div class="stat-card">
+                            <span class="stat-title">My Vehicles</span>
+                            <strong id="vehicleCount">0</strong>
+                        </div>
+
+                        <div class="stat-card">
+                            <span class="stat-title">Pending Requests</span>
+                            <strong id="pendingRequestCount">0</strong>
+                        </div>
+
+                        <div class="stat-card">
+                            <span class="stat-title">Active Trips</span>
+                            <strong id="activeTripCount">0</strong>
+                        </div>
+
+                    </div>
+
+                    <div class="welcome-card">
+                        <h2>Driver Workflow</h2>
+
+                        <div class="workflow">
+
+                            <div class="workflow-step">
+                                <span>1</span>
+                                <div>
+                                    <strong>Register Vehicle</strong>
+                                    <p>Add your vehicle to FleetFlow.</p>
+                                </div>
+                            </div>
+
+                            <div class="workflow-step">
+                                <span>2</span>
+                                <div>
+                                    <strong>Receive Trip Request</strong>
+                                    <p>Users can request one of your available vehicles.</p>
+                                </div>
+                            </div>
+
+                            <div class="workflow-step">
+                                <span>3</span>
+                                <div>
+                                    <strong>Accept or Reject</strong>
+                                    <p>Review each request and make a decision.</p>
+                                </div>
+                            </div>
+
+                            <div class="workflow-step">
+                                <span>4</span>
+                                <div>
+                                    <strong>Complete Trip</strong>
+                                    <p>Record the odometer readings when starting and completing a trip.</p>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <!-- USER DASHBOARD -->
+                <div id="userDashboard" class="dashboard-content hidden">
+                    <div class="welcome-card">
+                        <h2>Book a Vehicle</h2>
+
+                        <p>
+                            Browse available vehicles and create a trip request.
+                            The vehicle owner will confirm or reject your request.
+                        </p>
+
+                        <button type="button" class="primary-btn"
+                                onclick="showPage('availableCarsPage'); loadAvailableCars()">
+                            Browse Available Cars
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ADMIN DASHBOARD -->
+                <div id="adminDashboard" class="dashboard-content hidden">
+                    <div class="welcome-card">
+                        <h2>Admin Dashboard</h2>
+                        <p>Monitor FleetFlow users, vehicles, drivers and trips.</p>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- ==================== MY VEHICLES ==================== -->
+            <section id="vehiclesPage" class="page hidden">
+
+                <div class="page-header">
+                    <div>
+                        <h1>My Vehicles</h1>
+                        <p>Vehicles registered by you.</p>
+                    </div>
+
+                    <button type="button" class="primary-btn"
+                            onclick="showVehicleForm()">
+                        + Register Vehicle
+                    </button>
+                </div>
+
+                <div id="vehicleMessage"></div>
+
+                <div id="vehicleFormContainer" class="form-card hidden">
+                    <h2>Register Vehicle</h2>
+
+                    <p class="form-description">
+                        This vehicle will automatically belong to your driver account.
+                        You do not need to select a driver.
+                    </p>
+
+                    <div class="form-grid">
+
+                        <div class="form-group">
+                            <label for="vehicleRegistration">Registration Number *</label>
+                            <input id="vehicleRegistration" type="text"
+                                   placeholder="MH12AB1234">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="vehicleType">Vehicle Type</label>
+                            <select id="vehicleType">
+                                <option value="">Select type</option>
+                                <option value="HATCHBACK">Hatchback</option>
+                                <option value="SEDAN">Sedan</option>
+                                <option value="SUV">SUV</option>
+                                <option value="MUV">MUV</option>
+                                <option value="OTHER">Other</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="vehicleBrand">Brand</label>
+                            <input id="vehicleBrand" type="text" placeholder="Toyota">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="vehicleModel">Model</label>
+                            <input id="vehicleModel" type="text" placeholder="Innova">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="vehicleFuelType">Fuel Type</label>
+                            <select id="vehicleFuelType">
+                                <option value="">Select fuel</option>
+                                <option value="PETROL">Petrol</option>
+                                <option value="DIESEL">Diesel</option>
+                                <option value="CNG">CNG</option>
+                                <option value="ELECTRIC">Electric</option>
+                                <option value="HYBRID">Hybrid</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="vehiclePurchaseDate">Purchase Date</label>
+                            <input id="vehiclePurchaseDate" type="date">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="vehicleCurrentKM">Current KM</label>
+                            <input id="vehicleCurrentKM" type="number"
+                                   min="0" step="1" placeholder="12500">
+                        </div>
+
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="secondary-btn"
+                                onclick="hideVehicleForm()">
+                            Cancel
+                        </button>
+
+                        <button type="button" class="primary-btn"
+                                onclick="registerVehicle()">
+                            Register Vehicle
+                        </button>
+                    </div>
+                </div>
+
+                <div id="vehicleList" class="card-grid">
+                    <div class="loading">Loading vehicles...</div>
+                </div>
+
+            </section>
+
+            <!-- ==================== AVAILABLE CARS ==================== -->
+            <section id="availableCarsPage" class="page hidden">
+
+                <div class="page-header">
+                    <div>
+                        <h1>Available Cars</h1>
+                        <p>Select a vehicle and create a trip request.</p>
+                    </div>
+
+                    <button type="button" class="secondary-btn"
+                            onclick="loadAvailableCars()">
+                        Refresh
+                    </button>
+                </div>
+
+                <div id="availableCarsList" class="card-grid">
+                    <div class="loading">Loading available cars...</div>
+                </div>
+
+            </section>
+
+            <!-- ==================== MY TRIPS ==================== -->
+            <section id="tripsPage" class="page hidden">
+
+                <div class="page-header">
+                    <div>
+                        <h1>My Trips</h1>
+                        <p>Track your trip requests and trip status.</p>
+                    </div>
+
+                    <button type="button" class="secondary-btn"
+                            onclick="loadTrips()">
+                        Refresh
+                    </button>
+                </div>
+
+                <div id="tripsList" class="trip-list">
+                    <div class="loading">Loading trips...</div>
+                </div>
+
+            </section>
+
+            <!-- ==================== TRIP REQUESTS ==================== -->
+            <section id="requestsPage" class="page hidden">
+
+                <div class="page-header">
+                    <div>
+                        <h1>Trip Requests</h1>
+                        <p>Requests received for your vehicles.</p>
+                    </div>
+
+                    <button type="button" class="secondary-btn"
+                            onclick="loadTripRequests()">
+                        Refresh
+                    </button>
+                </div>
+
+                <div id="requestsList" class="trip-list">
+                    <div class="loading">Loading trip requests...</div>
+                </div>
+
+            </section>
+
+            <!-- ==================== TRIP HISTORY ==================== -->
+            <section id="tripHistoryPage" class="page hidden">
+
+                <div class="page-header">
+                    <div>
+                        <h1>Trip History</h1>
+                        <p>Review your completed and rejected trips.</p>
+                    </div>
+
+                    <button type="button" class="secondary-btn"
+                            onclick="loadTripHistory()">
+                        Refresh
+                    </button>
+                </div>
+
+                <div id="tripHistorySummary" class="stats-grid"></div>
+
+                <div id="tripHistoryList" class="trip-list">
+                    <div class="loading">Loading trip history...</div>
+                </div>
+
+            </section>
+
+            <!-- ==================== BILLING ==================== -->
+            <section id="billingPage" class="page hidden">
+
+                <div class="page-header">
+                    <div>
+                        <h1>Billing</h1>
+                        <p>Review estimated trip costs and final trip charges.</p>
+                    </div>
+
+                    <button type="button" class="secondary-btn"
+                            onclick="loadBilling()">
+                        Refresh
+                    </button>
+                </div>
+
+                <div id="billingSummary" class="stats-grid"></div>
+
+                <div id="billingList" class="trip-list">
+                    <div class="loading">Loading billing details...</div>
+                </div>
+
+            </section>
+
+        </main>
+    </div>
+</div>
+
+<!-- ==================== BOOK TRIP MODAL ==================== -->
+<div id="bookingModal" class="modal hidden">
+    <div class="modal-card">
+
+        <div class="modal-header">
+            <div>
+                <h2>Request Trip</h2>
+                <p id="selectedVehicleText"></p>
+            </div>
+
+            <button type="button" class="close-btn"
+                    onclick="closeBookingModal()" aria-label="Close">
+                ×
+            </button>
+        </div>
+
+        <div id="bookingError" class="error-message"></div>
+
+        <div class="form-group">
+            <label for="tripStartLocation">Start Location *</label>
+            <input id="tripStartLocation" type="text" placeholder="Pune">
+        </div>
+
+        <div class="form-group">
+            <label for="tripEndLocation">End Location *</label>
+            <input id="tripEndLocation" type="text" placeholder="Mumbai">
+        </div>
+
+        <div class="form-group">
+            <label for="tripDate">Trip Date *</label>
+            <input id="tripDate" type="date">
+        </div>
+
+        <div class="form-group">
+            <label for="tripPurpose">Purpose</label>
+            <textarea id="tripPurpose" placeholder="Business meeting"></textarea>
+        </div>
+
+        <div class="estimate-box">
+            <div>
+                <span>Estimated Distance</span>
+                <strong id="estimatedDistance">0 KM</strong>
+            </div>
+
+            <div>
+                <span>Estimated Price</span>
+                <strong id="estimatedPrice">₹0</strong>
+            </div>
+        </div>
+
+        <p class="estimate-warning">
+            Estimated distance is approximate. Actual distance may vary
+            depending on the route, traffic and road conditions.
+        </p>
+
+        <div class="form-actions">
+            <button type="button" class="secondary-btn"
+                    onclick="closeBookingModal()">
+                Cancel
+            </button>
+
+            <button type="button" class="primary-btn"
+                    onclick="createTripRequest()">
+                Request Trip
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<!-- ==================== ODOMETER MODAL ==================== -->
+<div id="odometerModal" class="modal hidden">
+    <div class="modal-card odometer-modal-card">
+
+        <div class="modal-header">
+            <div>
+                <h2 id="odometerModalTitle">Start Trip</h2>
+                <p id="odometerModalDescription">
+                    Enter the odometer reading to continue.
+                </p>
+            </div>
+
+            <button type="button" class="close-btn"
+                    onclick="closeOdometerModal()" aria-label="Close">
+                ×
+            </button>
+        </div>
+
+        <form id="odometerForm" onsubmit="submitOdometerReading(event)">
+
+            <div id="odometerError" class="error-message"></div>
+
+            <div class="form-group">
+                <label id="odometerLabel" for="odometerReading">
+                    Starting Odometer Reading (KM) *
+                </label>
+
+                <input id="odometerReading"
+                       type="number"
+                       min="0"
+                       step="1"
+                       placeholder="e.g. 12500"
+                       required>
+            </div>
+
+            <p class="form-description">
+                Enter the reading displayed on the vehicle's odometer.
+                Use a whole number in kilometres.
+            </p>
+
+            <div class="form-actions">
+                <button type="button" class="secondary-btn"
+                        onclick="closeOdometerModal()">
+                    Cancel
+                </button>
+
+                <button id="odometerSubmitBtn" type="submit"
+                        class="primary-btn">
+                    Start Trip
+                </button>
+            </div>
+
+        </form>
+    </div>
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>

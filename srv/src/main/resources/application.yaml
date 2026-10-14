@@ -1,0 +1,51 @@
+
+spring:
+  config:
+    activate:
+      on-profile: sqlite
+
+  sql:
+    init:
+      mode: never
+
+  datasource:
+    url: "jdbc:sqlite:../db/fleetflow.db"
+    driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 1
+
+  web:
+    resources:
+      static-locations:
+        - classpath:/static/
+        - file:../app/fleet-ui/
+
+logging:
+  level:
+    com.sap.cds.security.authentication: DEBUG
+    com.sap.cds.properties: DEBUG
+
+cds:
+  data-source:
+    auto-config:
+      enabled: false
+
+  security:
+    mock:
+      enabled: false
+      defaultUsers: true
+      users:
+        - name: "admin@fleetflow.com"
+          password: "admin"
+          roles:
+            - ADMIN
+
+        - name: "rahul@fleetflow.com"
+          password: "rahul"
+          roles:
+            - USER
+
+        - name: "amit.driver@fleetflow.com"
+          password: "amit"
+          roles:
+            - DRIVER

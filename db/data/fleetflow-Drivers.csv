@@ -1,0 +1,2 @@
+ID,firstName,lastName,email,phone,licenseNumber,licenseExpiry,status,availabilityStatus,user_ID
+44444444-4444-4444-4444-444444444444,Amit,Patil,amit.driver@fleetflow.com,9876543212,MH142025009999,2029-12-31,ACTIVE,AVAILABLE,33333333-3333-3333-3333-333333333333

@@ -1,0 +1,2 @@
+ID,registrationNumber,vehicleType,brand,model,fuelType,purchaseDate,currentKM,status,driver_ID
+55555555-5555-5555-5555-555555555555,MH12AB1234,SUV,Toyota,Innova,Diesel,2024-01-15,12450,AVAILABLE,44444444-4444-4444-4444-444444444444
