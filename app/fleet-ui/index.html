@@ -1,16 +1,229 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FleetFlow | Fleet & Vehicle Management</title>
+    <title>FleetFlow | Fleet &amp; Vehicle Management</title>
+    <meta name="description" content="Manage vehicles, coordinate trips and track billing in one connected fleet workspace.">
+    <meta name="theme-color" content="#0b1b32">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563eb'/%3E%3Ctext x='16' y='21' font-size='13' font-weight='700' text-anchor='middle' fill='white' font-family='Arial'%3EFF%3C/text%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@700;800&display=swap">
     <link rel="stylesheet" href="style.css">
+<link rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      crossorigin="">
 </head>
 
 <body>
 
-<!-- ==================== LOGIN PAGE ==================== -->
+<!-- ==================== PUBLIC LANDING / HERO PAGE ==================== -->
+<section id="landingPage" class="landing-page">
+    <nav class="landing-nav">
+        <a href="#" class="landing-brand" onclick="showLandingPage(); return false;">
+            <span class="landing-brand-icon">FF</span>
+            FleetFlow
+        </a>
+
+        <div class="landing-nav-actions">
+            <button type="button" class="landing-login-btn"
+                    onclick="openLoginPage('login')">
+                Login
+            </button>
+            <button type="button" class="landing-signup-btn"
+                    onclick="openLoginPage('register')">
+                Sign Up <span aria-hidden="true">↗</span>
+            </button>
+        </div>
+    </nav>
+
+    <main class="landing-hero">
+        <div class="landing-copy">
+            <div class="landing-eyebrow">
+                <span class="landing-live-dot"></span>
+                SMARTER FLEET MANAGEMENT
+            </div>
+
+            <h1>
+                Every journey.<br>
+                <span>Flowing forward.</span>
+            </h1>
+
+            <p class="landing-description">
+                Manage vehicles, coordinate trip requests, and keep every
+                journey on track with one connected fleet management
+                workspace.
+            </p>
+
+            <div class="landing-hero-actions">
+                <button type="button" class="landing-primary-btn"
+                        onclick="openLoginPage('login')">
+                    Login to FleetFlow <span aria-hidden="true">→</span>
+                </button>
+
+                <button type="button" class="landing-secondary-btn"
+                        onclick="openLoginPage('register')">
+                    Create an account
+                </button>
+            </div>
+
+            <div class="landing-trust">
+                <span class="landing-trust-icon">✓</span>
+                <span>Vehicles, trips and billing in one place</span>
+            </div>
+
+            <div class="landing-features">
+                <div>
+                    <span class="landing-feature-icon">01</span>
+                    <strong>Manage vehicles</strong>
+                    <small>Keep your fleet organized</small>
+                </div>
+                <div>
+                    <span class="landing-feature-icon">02</span>
+                    <strong>Coordinate trips</strong>
+                    <small>Track requests and journeys</small>
+                </div>
+                <div>
+                    <span class="landing-feature-icon">03</span>
+                    <strong>Track billing</strong>
+                    <small>Review trip charges</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="landing-visual" aria-label="FleetFlow vehicle illustration">
+            <div class="landing-visual-glow"></div>
+            <div class="landing-orbit landing-orbit-a"></div>
+            <div class="landing-orbit landing-orbit-b"></div>
+
+            <div class="landing-coordinate landing-coordinate-a">
+                <span></span> FLEET OPERATIONS
+            </div>
+            <div class="landing-coordinate landing-coordinate-b">
+                18.5204° N &nbsp;·&nbsp; 73.8567° E
+            </div>
+
+            <div class="landing-car-card">
+                <div class="landing-car-card-top">
+                    <div class="landing-mini-brand">FF</div>
+                    <span class="landing-live-status">
+                        <i></i> READY TO MOVE
+                    </span>
+                </div>
+
+                <svg class="landing-car-illustration"
+                     viewBox="0 0 520 270"
+                     role="img"
+                     aria-label="Illustration of a modern blue and silver car">
+                    <defs>
+                        <linearGradient id="landingCarPaint"
+                                        x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#ffffff"/>
+                            <stop offset="42%" stop-color="#b8d5fa"/>
+                            <stop offset="100%" stop-color="#4a82cb"/>
+                        </linearGradient>
+                        <linearGradient id="landingCarWindow"
+                                        x1="0" y1="0" x2="0.8" y2="1">
+                            <stop offset="0%" stop-color="#142d4b"/>
+                            <stop offset="100%" stop-color="#467eb8"/>
+                        </linearGradient>
+                        <linearGradient id="landingRoad"
+                                        x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stop-color="#193a60" stop-opacity="0"/>
+                            <stop offset="50%" stop-color="#75b6ff" stop-opacity=".9"/>
+                            <stop offset="100%" stop-color="#193a60" stop-opacity="0"/>
+                        </linearGradient>
+                    </defs>
+
+                    <ellipse cx="263" cy="218" rx="190" ry="22"
+                             fill="#020a16" opacity=".48"/>
+                    <ellipse cx="263" cy="221" rx="215" ry="3"
+                             fill="url(#landingRoad)" opacity=".9"/>
+
+                    <path d="M54 171 L70 137
+                             Q78 119 104 111
+                             L161 65 Q177 51 204 51
+                             L303 53 Q327 55 346 78
+                             L394 128 L436 144
+                             Q453 150 458 169
+                             L453 191 L49 191 Z"
+                          fill="url(#landingCarPaint)"
+                          stroke="#e7f2ff" stroke-width="2.5"/>
+
+                    <path d="M118 111 L168 70
+                             Q179 62 201 62
+                             L253 64 L253 112 Z"
+                          fill="url(#landingCarWindow)"
+                          stroke="#9cc6f6" stroke-width="2.5"/>
+
+                    <path d="M264 64 L301 66
+                             Q322 68 335 86
+                             L355 112 L264 112 Z"
+                          fill="url(#landingCarWindow)"
+                          stroke="#9cc6f6" stroke-width="2.5"/>
+
+                    <path d="M258 64 L258 113"
+                          stroke="#dcecff" stroke-width="3" opacity=".8"/>
+
+                    <path d="M83 139 L129 139"
+                          stroke="#ffffff" stroke-width="3" opacity=".8"/>
+                    <path d="M389 140 L423 153"
+                          stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+                    <path d="M54 164 L82 164"
+                          stroke="#61b7ff" stroke-width="8" stroke-linecap="round"/>
+
+                    <path d="M137 190 L137 202 M369 190 L369 202"
+                          stroke="#203d60" stroke-width="10"/>
+
+                    <circle cx="137" cy="190" r="34"
+                            fill="#071426" stroke="#9fc7f5" stroke-width="6"/>
+                    <circle cx="137" cy="190" r="17" fill="#7299c6"/>
+                    <circle cx="137" cy="190" r="7" fill="#e7f3ff"/>
+                    <circle cx="369" cy="190" r="34"
+                            fill="#071426" stroke="#9fc7f5" stroke-width="6"/>
+                    <circle cx="369" cy="190" r="17" fill="#7299c6"/>
+                    <circle cx="369" cy="190" r="7" fill="#e7f3ff"/>
+
+                    <path d="M174 128 L330 128"
+                          stroke="#ffffff" stroke-width="2" opacity=".6"/>
+                    <path d="M197 145 L315 145"
+                          stroke="#4f86c6" stroke-width="2" opacity=".5"/>
+                </svg>
+
+                <div class="landing-car-card-footer">
+                    <div>
+                        <strong>Your fleet, connected.</strong>
+                        <span>From vehicle to completed journey</span>
+                    </div>
+                    <span class="landing-card-arrow">↗</span>
+                </div>
+            </div>
+
+            <div class="landing-floating-card landing-floating-top">
+                <span class="landing-float-icon">↗</span>
+                <span>
+                    <strong>Keep moving</strong>
+                    <small>Plan · Manage · Complete</small>
+                </span>
+            </div>
+
+            <div class="landing-floating-card landing-floating-bottom">
+                <span class="landing-float-check">✓</span>
+                <span>
+                    <strong>One connected workflow</strong>
+                    <small>Every journey starts here</small>
+                </span>
+            </div>
+        </div>
+    </main>
+
+    <footer class="landing-footer">
+        <span>FleetFlow</span>
+        <span>Move smarter. Manage better.</span>
+    </footer>
+</section>
+<!-- ==================== END PUBLIC LANDING PAGE ==================== -->
 
 <!-- ==================== LOGIN / SIGNUP PAGE ==================== -->
 <div id="loginPage" class="login-page">
@@ -201,6 +414,17 @@
                     onclick="showPage('billingPage'); loadBilling()">
                 Billing
             </button>
+            
+<button id="analyticsNav" type="button" class="nav-btn hidden"
+        onclick="showPage('analyticsPage'); loadFleetAnalytics()">
+    AI Fleet Analytics
+</button>
+
+
+<button id="fleetTrackingNav" type="button" class="nav-btn hidden"
+        onclick="showPage('fleetTrackingPage'); loadFleetTracking()">
+    Live Fleet Tracking
+</button>
 
         </aside>
 
@@ -216,6 +440,96 @@
                         <p id="dashboardSubtitle">Welcome to FleetFlow</p>
                     </div>
                 </div>
+
+                <!-- FLEETFLOW HERO: UI-only enhancement; existing dashboard IDs and handlers remain unchanged -->
+                <section class="dashboard-hero" aria-label="FleetFlow overview">
+                    <div class="hero-copy">
+                        <div class="hero-eyebrow">
+                            <span class="hero-eyebrow-dot"></span>
+                            SMART FLEET OPERATIONS
+                        </div>
+                        <h2>Every journey.<br><span>Flowing forward.</span></h2>
+                        <p>
+                            Your fleet workspace for managing vehicles, coordinating trips,
+                            and keeping every journey moving smoothly.
+                        </p>
+                        <div class="hero-actions">
+                            <button type="button" class="hero-primary-btn"
+                                    onclick="showPage('availableCarsPage'); loadAvailableCars()">
+                                Explore available vehicles
+                                <span aria-hidden="true">↗</span>
+                            </button>
+                            <div class="hero-trust-note">
+                                <span class="hero-status-dot"></span>
+                                One connected fleet workspace
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="hero-visual" aria-hidden="true">
+                        <div class="hero-orbit hero-orbit-one"></div>
+                        <div class="hero-orbit hero-orbit-two"></div>
+                        <div class="hero-glow"></div>
+                        <div class="hero-route route-one"></div>
+                        <div class="hero-route route-two"></div>
+                        <div class="hero-coordinate coordinate-one">18.5204° N</div>
+                        <div class="hero-coordinate coordinate-two">73.8567° E</div>
+                        <div class="hero-vehicle-card">
+                            <div class="hero-vehicle-topline">
+                                <span class="hero-vehicle-icon">FF</span>
+                                <span class="hero-live-label"><i></i> FLEETFLOW</span>
+                            </div>
+                            <svg class="hero-vehicle-art" viewBox="0 0 440 190" role="img" aria-label="Stylized vehicle illustration">
+                                <defs>
+                                    <linearGradient id="heroCarBody" x1="0" y1="0" x2="1" y2="1">
+                                        <stop offset="0%" stop-color="#f8fbff"/>
+                                        <stop offset="48%" stop-color="#a9c9f5"/>
+                                        <stop offset="100%" stop-color="#477dc7"/>
+                                    </linearGradient>
+                                    <linearGradient id="heroCarGlass" x1="0" y1="0" x2="0.9" y2="1">
+                                        <stop offset="0%" stop-color="#17345c"/>
+                                        <stop offset="100%" stop-color="#3975b9"/>
+                                    </linearGradient>
+                                </defs>
+                                <ellipse cx="220" cy="154" rx="158" ry="17" fill="#06162e" opacity=".48"/>
+                                <path d="M67 123 L82 94 Q90 83 112 78 L157 43 Q169 33 190 33 L269 35 Q288 37 303 54 L340 91 L367 101 Q379 107 380 122 L375 139 L65 139 Z"
+                                      fill="url(#heroCarBody)" stroke="#e4efff" stroke-width="2"/>
+                                <path d="M124 78 L164 46 Q171 41 189 41 L224 42 L224 79 Z"
+                                      fill="url(#heroCarGlass)" stroke="#9ec6f8" stroke-width="2"/>
+                                <path d="M234 42 L267 44 Q281 46 291 59 L310 79 L234 79 Z"
+                                      fill="url(#heroCarGlass)" stroke="#9ec6f8" stroke-width="2"/>
+                                <path d="M226 43 L226 79" stroke="#dceaff" stroke-width="3" opacity=".85"/>
+                                <path d="M91 99 L132 99" stroke="#edf5ff" stroke-width="3" opacity=".8"/>
+                                <path d="M317 96 L351 108" stroke="#f6fbff" stroke-width="5" stroke-linecap="round"/>
+                                <path d="M69 117 L96 117" stroke="#56b7ff" stroke-width="6" stroke-linecap="round"/>
+                                <path d="M140 136 L140 143 M305 136 L305 143" stroke="#18375e" stroke-width="7"/>
+                                <circle cx="137" cy="137" r="25" fill="#07182e" stroke="#a7c9f5" stroke-width="5"/>
+                                <circle cx="137" cy="137" r="11" fill="#8daed7"/>
+                                <circle cx="137" cy="137" r="4" fill="#eaf4ff"/>
+                                <circle cx="306" cy="137" r="25" fill="#07182e" stroke="#a7c9f5" stroke-width="5"/>
+                                <circle cx="306" cy="137" r="11" fill="#8daed7"/>
+                                <circle cx="306" cy="137" r="4" fill="#eaf4ff"/>
+                                <path d="M164 93 L272 93" stroke="#ffffff" stroke-width="2" opacity=".45"/>
+                            </svg>
+                            <div class="hero-vehicle-caption">
+                                <div>
+                                    <strong>Fleet operations</strong>
+                                    <span>One clear view of every journey</span>
+                                </div>
+                                <span class="hero-arrow-circle">↗</span>
+                            </div>
+                        </div>
+                        <div class="hero-float-chip hero-chip-top">
+                            <span class="hero-chip-symbol">↗</span>
+                            <span><strong>Stay in motion</strong><small>Plan · Track · Complete</small></span>
+                        </div>
+                        <div class="hero-float-chip hero-chip-bottom">
+                            <span class="hero-chip-pulse"></span>
+                            <span><strong>Connected workflow</strong><small>From request to completion</small></span>
+                        </div>
+                        <div class="hero-grid-pattern"></div>
+                    </div>
+                </section>
 
                 <!-- DRIVER DASHBOARD -->
                 <div id="driverDashboard" class="dashboard-content hidden">
@@ -511,51 +825,238 @@
                 <div id="billingList" class="trip-list">
                     <div class="loading">Loading billing details...</div>
                 </div>
+ </section>
+                
+<!-- AI FLEET ANALYTICS -->
+<section id="analyticsPage" class="page hidden">
+    <div class="page-header">
+        <div>
+            <h1>AI Fleet Analytics</h1>
+            <p>Understand fleet activity and discover actionable insights.</p>
+        </div>
+        
 
-            </section>
+        <button type="button" class="primary-btn"
+                onclick="loadFleetAnalytics()">
+            Refresh Analytics
+        </button>
+    </div>
+
+    <div id="analyticsMessage" class="analytics-message">
+        Load your fleet data to generate insights.
+    </div>
+
+    <div id="analyticsSummary" class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-title">Total Trips</span>
+            <strong>—</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-title">Completed Trips</span>
+            <strong>—</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-title">Actual Distance</span>
+            <strong>—</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-title">Final Charges</span>
+            <strong>—</strong>
+        </div>
+    </div>
+
+    <div class="welcome-card analytics-insights-card">
+        <h2>Fleet Insights</h2>
+        <div id="analyticsInsights">
+            <p>Insights will appear after your data is loaded.</p>
+        </div>
+    </div>
+
+    <div class="welcome-card analytics-insights-card">
+        <h2>Ask About Your Fleet</h2>
+        <p>
+            Ask a question about the metrics and insights shown above.
+        </p>
+
+        <div class="analytics-question-row">
+            <input id="analyticsQuestion" type="text"
+                   placeholder="e.g. How many trips were completed?"
+                   maxlength="300">
+
+            <button type="button" class="primary-btn"
+                    onclick="askFleetAnalytics()">
+                Ask
+            </button>
+        </div>
+
+        <div id="analyticsAnswer" class="analytics-answer hidden"
+             aria-live="polite"></div>
+    </div>
+</section>
+
+    
+<!-- LIVE FLEET TRACKING -->
+<section id="fleetTrackingPage" class="page hidden">
+    <div class="page-header">
+        <div>
+            <h1>Live Fleet Tracking</h1>
+            <p>View vehicle trip locations on an interactive map.</p>
+        </div>
+
+        <button type="button" class="primary-btn"
+                onclick="loadFleetTracking()">
+            Refresh Tracking
+        </button>
+    </div>
+
+    <div id="fleetTrackingMessage" class="analytics-message">
+        Loading fleet tracking data...
+    </div>
+
+    <div id="fleetTrackingSummary" class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-title">Total Vehicles</span>
+            <strong>—</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-title">Trips with Coordinates</span>
+            <strong>—</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-title">Recorded Routes</span>
+            <strong>—</strong>
+        </div>
+    </div>
+
+    <div class="welcome-card">
+        <h2>Fleet Map</h2>
+        <p>
+            This map displays recorded trip coordinates, not live GPS positions.
+        </p>
+        <div id="fleetTrackingMap"
+             style="height: 480px; width: 100%; border-radius: 12px;">
+        </div>
+    </div>
+
+    <div class="welcome-card">
+        <h2>Trip Locations</h2>
+        <div id="fleetTrackingList">
+            <p>Trip location details will appear here.</p>
+        </div>
+    </div>
+
+</section>
+
+            
 
         </main>
     </div>
 </div>
 
+
 <!-- ==================== BOOK TRIP MODAL ==================== -->
 <div id="bookingModal" class="modal hidden">
     <div class="modal-card">
 
+        <!-- HEADER -->
         <div class="modal-header">
             <div>
                 <h2>Request Trip</h2>
                 <p id="selectedVehicleText"></p>
             </div>
 
-            <button type="button" class="close-btn"
-                    onclick="closeBookingModal()" aria-label="Close">
+            <button
+                type="button"
+                class="close-btn"
+                onclick="closeBookingModal()"
+                aria-label="Close">
                 ×
             </button>
         </div>
 
+        <!-- ERROR MESSAGE -->
         <div id="bookingError" class="error-message"></div>
 
-        <div class="form-group">
-            <label for="tripStartLocation">Start Location *</label>
-            <input id="tripStartLocation" type="text" placeholder="Pune">
+        <!-- PICKUP LOCATION -->
+        <div class="form-group location-search-group">
+            <label for="tripStartLocation">
+                Pickup Location *
+            </label>
+
+            <input
+                id="tripStartLocation"
+                type="text"
+                placeholder="Search pickup place or address..."
+                autocomplete="off"
+                aria-autocomplete="list"
+                aria-controls="tripStartSuggestions"
+                required
+            >
+
+            <div
+                id="tripStartSuggestions"
+                class="location-suggestions hidden"
+                role="listbox">
+            </div>
+
+            <small
+                id="tripStartSelected"
+                class="location-selected">
+                Select a location from the search results.
+            </small>
         </div>
 
-        <div class="form-group">
-            <label for="tripEndLocation">End Location *</label>
-            <input id="tripEndLocation" type="text" placeholder="Mumbai">
+        <!-- DESTINATION LOCATION -->
+        <div class="form-group location-search-group">
+            <label for="tripEndLocation">
+                Destination *
+            </label>
+
+            <input
+                id="tripEndLocation"
+                type="text"
+                placeholder="Search destination place or address..."
+                autocomplete="off"
+                aria-autocomplete="list"
+                aria-controls="tripEndSuggestions"
+                required
+            >
+
+            <div
+                id="tripEndSuggestions"
+                class="location-suggestions hidden"
+                role="listbox">
+            </div>
+
+            <small
+                id="tripEndSelected"
+                class="location-selected">
+                Select a location from the search results.
+            </small>
         </div>
 
+        <!-- TRIP DATE -->
         <div class="form-group">
             <label for="tripDate">Trip Date *</label>
-            <input id="tripDate" type="date">
+
+            <input
+                id="tripDate"
+                type="date"
+                required
+            >
         </div>
 
+        <!-- TRIP PURPOSE -->
         <div class="form-group">
             <label for="tripPurpose">Purpose</label>
-            <textarea id="tripPurpose" placeholder="Business meeting"></textarea>
+
+            <textarea
+                id="tripPurpose"
+                placeholder="Business meeting">
+            </textarea>
         </div>
 
+        <!-- DISTANCE AND PRICE ESTIMATE -->
         <div class="estimate-box">
             <div>
                 <span>Estimated Distance</span>
@@ -568,25 +1069,32 @@
             </div>
         </div>
 
+        <!-- ESTIMATE DISCLAIMER -->
         <p class="estimate-warning">
             Estimated distance is approximate. Actual distance may vary
             depending on the route, traffic and road conditions.
         </p>
 
+        <!-- ACTION BUTTONS -->
         <div class="form-actions">
-            <button type="button" class="secondary-btn"
-                    onclick="closeBookingModal()">
+            <button
+                type="button"
+                class="secondary-btn"
+                onclick="closeBookingModal()">
                 Cancel
             </button>
 
-            <button type="button" class="primary-btn"
-                    onclick="createTripRequest()">
+            <button
+                type="button"
+                class="primary-btn"
+                onclick="createTripRequest()">
                 Request Trip
             </button>
         </div>
 
     </div>
 </div>
+<!-- ==================== END BOOK TRIP MODAL ==================== -->
 
 <!-- ==================== ODOMETER MODAL ==================== -->
 <div id="odometerModal" class="modal hidden">
@@ -647,6 +1155,11 @@
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
 <script src="lib/jspdf.umd.min.js"></script>
+
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin="">
+</script>
 <script src="app.js"></script>
 
 </body>

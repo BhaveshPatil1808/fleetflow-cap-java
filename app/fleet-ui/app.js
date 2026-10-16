@@ -11,6 +11,36 @@ let odometerMode = null;
    AUTHENTICATION
    ========================================================= */
 
+function showLandingPage() {
+    const landingPage = document.getElementById("landingPage");
+    const loginPage = document.getElementById("loginPage");
+    const appPage = document.getElementById("appPage");
+
+    if (landingPage) landingPage.classList.remove("hidden");
+    if (loginPage) loginPage.classList.add("hidden");
+    if (appPage) appPage.classList.add("hidden");
+
+    window.scrollTo({ top: 0, behavior: "auto" });
+}
+
+function openLoginPage(form = "login") {
+    const landingPage = document.getElementById("landingPage");
+    const loginPage = document.getElementById("loginPage");
+    const appPage = document.getElementById("appPage");
+
+    if (landingPage) landingPage.classList.add("hidden");
+    if (appPage) appPage.classList.add("hidden");
+    if (loginPage) loginPage.classList.remove("hidden");
+
+    if (typeof showAuthForm === "function") {
+        showAuthForm(form);
+    }
+
+    window.scrollTo({ top: 0, behavior: "auto" });
+}
+
+
+
 function showAuthForm(form) {
     document.getElementById("loginError").textContent = "";
 
@@ -236,9 +266,25 @@ function restoreSession() {
    SHOW APPLICATION
    ========================================================= */
 
+
 function showApplication() {
-    document.getElementById("loginPage").classList.add("hidden");
-    document.getElementById("appPage").classList.remove("hidden");
+    // Hide the public landing page after login
+    const landingPage = document.getElementById("landingPage");
+    if (landingPage) {
+        landingPage.classList.add("hidden");
+    }
+
+    // Hide the login/register page
+    const loginPage = document.getElementById("loginPage");
+    if (loginPage) {
+        loginPage.classList.add("hidden");
+    }
+
+    // Display the authenticated application
+    const appPage = document.getElementById("appPage");
+    if (appPage) {
+        appPage.classList.remove("hidden");
+    }
 
     document.getElementById("welcomeUser").textContent =
         currentUser.username;
@@ -262,7 +308,9 @@ function configureNavigation() {
         "tripsNav",
         "requestsNav",
         "tripHistoryNav",
-        "billingNav"
+        "billingNav",
+        "analyticsNav",
+        "fleetTrackingNav"
     ];
 
     navigationIds.forEach(id => {
@@ -286,6 +334,11 @@ function configureNavigation() {
 
         if (historyNav) historyNav.classList.remove("hidden");
         if (billingNav) billingNav.classList.remove("hidden");
+    }
+
+    if (currentUser.role === "ADMIN") {
+        document.getElementById("analyticsNav")?.classList.remove("hidden");
+        document.getElementById("fleetTrackingNav")?.classList.remove("hidden");
     }
 }
 
@@ -1262,6 +1315,7 @@ async function payForTrip(tripID, button) {
 
 
 
+
 async function downloadInvoicePdf(tripID, button) {
     if (!window.jspdf?.jsPDF) {
         alert("PDF library could not load. Please refresh the page and try again.");
@@ -1276,12 +1330,12 @@ async function downloadInvoicePdf(tripID, button) {
     }
 
     try {
-        // Fetch existing records only. No database changes are made.
+        // 1. Fetch the current user's trip and invoice records.
         const trips = await getCurrentUserTrips();
         const trip = trips.find(item => item.ID === tripID);
 
         if (!trip || trip.status !== "COMPLETED") {
-            throw new Error("A completed trip is required to generate an invoice.");
+            throw new Error("Only completed trips can be invoiced.");
         }
 
         const invoiceResponse = await apiRequest(
@@ -1289,435 +1343,630 @@ async function downloadInvoicePdf(tripID, button) {
         );
 
         const invoices = invoiceResponse?.value || [];
-        const invoice = invoices.find(item => item.trip_ID === tripID);
+        const invoice = invoices.find(item => item.trip_ID === trip.ID);
+
+        // Payment information is optional and read-only here.
+        let payment = null;
+
+        if (invoice?.ID) {
+            try {
+                const paymentResponse = await apiRequest(
+                    `${API_BASE}/payment/Payments`
+                );
+
+                const payments = (paymentResponse?.value || [])
+                    .filter(item => item.invoice_ID === invoice.ID)
+                    .sort((a, b) => {
+                        const aPaid = String(a.status).toUpperCase() === "PAID";
+                        const bPaid = String(b.status).toUpperCase() === "PAID";
+                        return Number(bPaid) - Number(aPaid);
+                    });
+
+                payment = payments[0] || null;
+            } catch (error) {
+                console.warn(
+                    "Payment details are unavailable for this invoice.",
+                    error
+                );
+            }
+        }
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+            orientation: "portrait",
+            unit: "mm",
+            format: "a4"
+        });
+
+        const W = pdf.internal.pageSize.getWidth();
+        const H = pdf.internal.pageSize.getHeight();
+        const M = 15;
+        const CW = W - M * 2;
+        const FOOTER_Y = H - 13;
+
+        const C = {
+            navy: [19, 38, 70],
+            blue: [43, 99, 210],
+            paleBlue: [239, 245, 255],
+            text: [40, 49, 63],
+            muted: [105, 115, 130],
+            line: [220, 226, 235],
+            white: [255, 255, 255],
+            green: [22, 120, 72],
+            greenBg: [230, 247, 237],
+            amber: [151, 92, 15],
+            amberBg: [255, 246, 225],
+            red: [176, 45, 45],
+            redBg: [255, 235, 235],
+            grayBg: [246, 248, 251]
+        };
 
         const customerName = [
             currentUser?.firstName,
             currentUser?.lastName
         ].filter(Boolean).join(" ") ||
-            currentUser?.email ||
+            currentUser?.username ||
             "FleetFlow Customer";
 
-        const invoiceNumber = invoice?.invoiceNumber || `FF-${trip.ID}`;
-        const paymentStatus = String(invoice?.status || "UNPAID").toUpperCase();
+        const customerEmail =
+            currentUser?.email ||
+            currentUser?.username ||
+            "Not available";
 
-        const actualDistance = Number(trip.actualDistance) || 0;
-        const rate = Number(trip.ratePerKM) || 0;
-        const calculatedCharge = actualDistance * rate;
+        const invoiceNumber =
+            invoice?.invoiceNumber || `FF-${trip.ID}`;
 
-        // Prefer the persisted invoice amount, then the completed trip charge.
-        const finalAmount = Number(
-            invoice?.amount ?? trip.finalPrice ?? calculatedCharge
-        );
+        const invoiceStatus =
+            String(invoice?.status || "UNPAID").toUpperCase();
 
-        const vehicle = trip.vehicle
-            ? [
-                trip.vehicle.brand,
-                trip.vehicle.model,
-                trip.vehicle.registrationNumber
-            ].filter(Boolean).join(" ")
-            : "Not specified";
+        const paymentStatus =
+            String(payment?.status || invoiceStatus).toUpperCase();
 
-        const registrationNumber =
-            trip.vehicle?.registrationNumber || "Not specified";
+        const rawAmount = invoice?.amount ?? trip.finalPrice;
+        const amount = Number(rawAmount);
 
-        const formatCurrency = amount =>
-            "INR " + Number(amount || 0).toLocaleString("en-IN", {
+        if (
+            rawAmount == null ||
+            !Number.isFinite(amount) ||
+            amount < 0
+        ) {
+            throw new Error("The final invoice amount is unavailable.");
+        }
+
+        const vehicle = trip.vehicle || {};
+        const driver = trip.driver || {};
+
+        const vehicleName = [
+            vehicle.brand,
+            vehicle.model
+        ].filter(Boolean).join(" ") || "Not available";
+
+        const driverName = [
+            driver.firstName,
+            driver.lastName
+        ].filter(Boolean).join(" ") || "Not available";
+
+        const distance = Number(trip.actualDistance);
+        const rate = Number(trip.ratePerKM);
+
+        const hasDistance =
+            trip.actualDistance != null &&
+            Number.isFinite(distance) &&
+            distance >= 0;
+
+        const hasRate =
+            trip.ratePerKM != null &&
+            Number.isFinite(rate) &&
+            rate >= 0;
+
+        const formatMoney = value =>
+            "INR " + Number(value).toLocaleString("en-IN", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             });
 
         const formatDate = value => {
-            if (!value) return "N/A";
+            if (!value) return "Not available";
 
-            // Avoid timezone shifts for date-only values such as YYYY-MM-DD.
             const raw = String(value);
-            const date = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+            const parsed = /^\d{4}-\d{2}-\d{2}$/.test(raw)
                 ? new Date(raw + "T00:00:00")
                 : new Date(raw);
 
-            return Number.isNaN(date.getTime())
+            return Number.isNaN(parsed.getTime())
                 ? raw
-                : date.toLocaleDateString("en-IN", {
+                : parsed.toLocaleDateString("en-IN", {
                     day: "2-digit",
                     month: "short",
                     year: "numeric"
                 });
         };
 
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF("p", "mm", "a4");
+        const setTextColor = color => pdf.setTextColor(...color);
+        const setFillColor = color => pdf.setFillColor(...color);
+        const setDrawColor = color => pdf.setDrawColor(...color);
 
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        const margin = 14;
-        const contentWidth = pageWidth - margin * 2;
+        const wrapText = (value, width) =>
+            pdf.splitTextToSize(String(value ?? "Not available"), width);
+
         let y = 0;
 
-        // FleetFlow brand palette.
-        const navy = [22, 42, 75];
-        const blue = [37, 99, 235];
-        const lightBlue = [239, 246, 255];
-        const lightGray = [245, 247, 250];
-        const gray = [91, 100, 115];
-        const dark = [35, 43, 55];
-        const green = [22, 128, 75];
-        const red = [185, 45, 45];
-        const border = [220, 226, 234];
+        // Each new page gets a compact continuation header.
+        function drawContinuationHeader() {
+            setFillColor(C.navy);
+            pdf.rect(0, 0, W, 17, "F");
 
-        const setText = (color = dark) => pdf.setTextColor(...color);
-
-        const drawSectionTitle = title => {
-            pdf.setFillColor(...lightBlue);
-            pdf.roundedRect(margin, y, contentWidth, 8, 1.5, 1.5, "F");
             pdf.setFont("helvetica", "bold");
-            pdf.setFontSize(9);
-            setText(navy);
-            pdf.text(title.toUpperCase(), margin + 3, y + 5.3);
-            y += 13;
-        };
+            pdf.setFontSize(12);
+            setTextColor(C.white);
+            pdf.text("FLEETFLOW", M, 11);
 
-        const drawLabelValue = (label, value, x, valueX, maxWidth = 60) => {
             pdf.setFont("helvetica", "normal");
-            pdf.setFontSize(8.5);
-            setText(gray);
-            pdf.text(label, x, y);
+            pdf.setFontSize(8);
+            setTextColor([218, 228, 245]);
+            pdf.text("INVOICE " + invoiceNumber, W - M, 11, {
+                align: "right"
+            });
+
+            y = 25;
+        }
+
+        function drawFooter() {
+            setDrawColor(C.line);
+            pdf.setLineWidth(0.25);
+            pdf.line(M, FOOTER_Y - 3, W - M, FOOTER_Y - 3);
+
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(7);
+            setTextColor(C.muted);
+
+            pdf.text(
+                "FleetFlow | Fleet & Vehicle Management System",
+                M,
+                FOOTER_Y
+            );
+
+            pdf.text(
+                "System-generated invoice",
+                W / 2,
+                FOOTER_Y,
+                { align: "center" }
+            );
+
+            pdf.text(
+                `Page ${pdf.internal.getCurrentPageInfo().pageNumber}`,
+                W - M,
+                FOOTER_Y,
+                { align: "right" }
+            );
+        }
+
+        function ensureSpace(height) {
+            if (y + height > FOOTER_Y - 5) {
+                drawFooter();
+                pdf.addPage();
+                drawContinuationHeader();
+            }
+        }
+
+        function drawSection(title) {
+            ensureSpace(14);
+
+            setFillColor(C.paleBlue);
+            pdf.roundedRect(M, y, CW, 8, 1.5, 1.5, "F");
 
             pdf.setFont("helvetica", "bold");
-            setText(dark);
+            pdf.setFontSize(8.5);
+            setTextColor(C.navy);
+            pdf.text(title.toUpperCase(), M + 3, y + 5.3);
 
-            const lines = pdf.splitTextToSize(
-                String(value ?? "N/A"),
-                maxWidth
+            y += 13;
+        }
+
+        function drawField(label, value, x, yy, width) {
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(7.5);
+            setTextColor(C.muted);
+            pdf.text(String(label), x, yy);
+
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(8.5);
+            setTextColor(C.text);
+
+            const lines = wrapText(value, width);
+            pdf.text(lines, x, yy + 5);
+
+            return 5 + lines.length * 4;
+        }
+
+        function drawInfoRow(left, right) {
+            const leftLines = wrapText(left[1], 54).length;
+            const rightLines = wrapText(right[1], 54).length;
+            const rowHeight = Math.max(leftLines, rightLines) * 4 + 10;
+
+            ensureSpace(rowHeight);
+
+            drawField(left[0], left[1], M + 2, y, 54);
+            drawField(right[0], right[1], W / 2 + 2, y, 54);
+
+            y += rowHeight;
+        }
+
+        function drawStatusBadge(status, x, yy, maxWidth = 38) {
+            const normalized = String(status || "UNPAID").toUpperCase();
+            const isPaid = normalized === "PAID";
+            const isFailed = [
+                "FAILED",
+                "CANCELLED",
+                "REJECTED"
+            ].includes(normalized);
+
+            const bg = isPaid
+                ? C.greenBg
+                : isFailed
+                    ? C.redBg
+                    : C.amberBg;
+
+            const fg = isPaid
+                ? C.green
+                : isFailed
+                    ? C.red
+                    : C.amber;
+
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(7);
+
+            const label = normalized.replace(/_/g, " ");
+            const badgeWidth = Math.min(
+                maxWidth,
+                Math.max(22, pdf.getTextWidth(label) + 7)
             );
-            pdf.text(lines, valueX, y);
-            return Math.max(5, lines.length * 4.2);
-        };
 
-        const ensureSpace = needed => {
-            if (y + needed > pageHeight - 17) {
-                pdf.addPage();
-                y = 18;
-            }
-        };
+            setFillColor(bg);
+            pdf.roundedRect(x, yy - 4, badgeWidth, 7, 2, 2, "F");
 
-        const safeText = value => String(value ?? "N/A");
+            setTextColor(fg);
+            pdf.text(label, x + badgeWidth / 2, yy + 0.5, {
+                align: "center",
+                maxWidth: badgeWidth - 3
+            });
 
-        // ---------- HEADER ----------
-        pdf.setFillColor(...navy);
-        pdf.rect(0, 0, pageWidth, 38, "F");
+            return badgeWidth;
+        }
 
-        pdf.setFillColor(...blue);
-        pdf.rect(0, 35, pageWidth, 3, "F");
+        // --------------------------------------------------
+        // PREMIUM BRANDED HEADER
+        // --------------------------------------------------
+        setFillColor(C.navy);
+        pdf.rect(0, 0, W, 40, "F");
+
+        setFillColor(C.blue);
+        pdf.rect(0, 37, W, 3, "F");
 
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(23);
-        pdf.setTextColor(255, 255, 255);
-        pdf.text("FLEETFLOW", margin, 17);
+        setTextColor(C.white);
+        pdf.text("FLEETFLOW", M, 17);
 
         pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(8.5);
-        pdf.setTextColor(220, 230, 245);
-        pdf.text("FLEET & VEHICLE MANAGEMENT SYSTEM", margin, 24);
+        pdf.setFontSize(7.5);
+        setTextColor([218, 228, 245]);
+        pdf.text("FLEET & VEHICLE MANAGEMENT SYSTEM", M, 24);
 
         pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(16);
-        pdf.setTextColor(255, 255, 255);
-        pdf.text("TRIP INVOICE", pageWidth - margin, 17, {
-            align: "right"
-        });
+        pdf.setFontSize(14);
+        setTextColor(C.white);
+        pdf.text("TRIP INVOICE", W - M, 15, { align: "right" });
 
         pdf.setFont("helvetica", "normal");
         pdf.setFontSize(8);
-        pdf.setTextColor(220, 230, 245);
-        pdf.text("OFFICIAL BILLING DOCUMENT", pageWidth - margin, 24, {
+        setTextColor([218, 228, 245]);
+        pdf.text("Invoice: " + invoiceNumber, W - M, 22, {
             align: "right"
         });
 
-        // ---------- INVOICE SUMMARY ----------
-        y = 47;
+        drawStatusBadge(invoiceStatus, W - M - 38, 32, 38);
 
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(8);
-        setText(gray);
-        pdf.text("INVOICE NUMBER", margin, y);
-        pdf.text("INVOICE DATE", pageWidth / 2 + 5, y);
+        // --------------------------------------------------
+        // INVOICE METADATA
+        // --------------------------------------------------
+        y = 49;
 
-        y += 6;
-        pdf.setFontSize(11);
-        setText(navy);
-        pdf.text(invoiceNumber, margin, y);
-        pdf.text(formatDate(new Date()), pageWidth / 2 + 5, y);
+        drawField("INVOICE DATE", formatDate(new Date()), M + 2, y, 60);
+        drawField("TRIP DATE", formatDate(trip.tripDate), W / 2 + 2, y, 60);
 
+        y += 16;
+        setDrawColor(C.line);
+        pdf.line(M, y, W - M, y);
         y += 8;
-        pdf.setDrawColor(...border);
-        pdf.line(margin, y, pageWidth - margin, y);
-        y += 9;
 
-        // ---------- CUSTOMER DETAILS ----------
-        drawSectionTitle("Bill To");
+        // --------------------------------------------------
+        // CUSTOMER DETAILS
+        // --------------------------------------------------
+        drawSection("Customer / Bill To");
 
-        const leftX = margin + 1;
-        const rightX = pageWidth / 2 + 5;
+        drawField("CUSTOMER NAME", customerName, M + 2, y, 75);
+        drawField("CUSTOMER EMAIL / LOGIN", customerEmail, W / 2 + 2, y, 75);
 
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(11);
-        setText(dark);
-        pdf.text(customerName, leftX, y);
+        y += 15;
 
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(8.5);
-        setText(gray);
-        pdf.text(safeText(currentUser?.email || "N/A"), leftX, y + 6);
+        // --------------------------------------------------
+        // TRIP AND VEHICLE REPORT
+        // --------------------------------------------------
+        drawSection("Detailed Trip & Vehicle Report");
+
+        drawInfoRow(
+            ["Trip ID", trip.ID],
+            ["Trip Status", trip.status || "Not available"]
+        );
+
+        drawInfoRow(
+            ["Pickup Location", trip.startLocation || "Not available"],
+            ["Destination", trip.endLocation || "Not available"]
+        );
+
+        drawInfoRow(
+            ["Vehicle", vehicleName],
+            ["Registration Number", vehicle.registrationNumber || "Not available"]
+        );
+
+        drawInfoRow(
+            ["Vehicle Type", vehicle.vehicleType || "Not available"],
+            ["Fuel Type", vehicle.fuelType || "Not available"]
+        );
+
+        drawInfoRow(
+            ["Driver", driverName],
+            ["Driver Contact", driver.phone || "Not available"]
+        );
+
+        drawInfoRow(
+            [
+                "Starting Odometer",
+                trip.startMeter == null ? "Not recorded" : `${trip.startMeter} km`
+            ],
+            [
+                "Ending Odometer",
+                trip.endMeter == null ? "Not recorded" : `${trip.endMeter} km`
+            ]
+        );
+
+        drawInfoRow(
+            [
+                "Actual Distance",
+                hasDistance ? `${distance.toLocaleString("en-IN")} km` : "Not recorded"
+            ],
+            [
+                "Rate per Kilometre",
+                hasRate ? `${formatMoney(rate)} / km` : "Not recorded"
+            ]
+        );
+
+        drawInfoRow(
+            ["Trip Purpose", trip.purpose || "Not specified"],
+            ["Estimated Price", trip.estimatedPrice == null
+                ? "Not available"
+                : formatMoney(Number(trip.estimatedPrice))]
+        );
+
+        // --------------------------------------------------
+        // BILLING BREAKDOWN
+        // --------------------------------------------------
+        drawSection("Billing Breakdown");
+
+        ensureSpace(30);
+
+        setFillColor(C.grayBg);
+        pdf.roundedRect(M, y - 3, CW, 9, 1, 1, "F");
 
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(8);
-        setText(gray);
-        pdf.text("DOCUMENT TYPE", rightX, y - 1);
+        setTextColor(C.navy);
 
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(9);
-        setText(dark);
-        pdf.text("Completed Trip Invoice", rightX, y + 5);
-
-        y += 17;
-
-        // ---------- TRIP DETAILS ----------
-        drawSectionTitle("Trip Details");
-
-        const col1 = margin + 2;
-        const col2 = pageWidth / 2 + 4;
-        const valueOffset = 29;
-        const valueOffset2 = 29;
-        const valueWidth = 47;
-
-        const tripRows = [
-            [
-                ["Trip ID", trip.ID],
-                ["Trip Date", formatDate(trip.tripDate)]
-            ],
-            [
-                ["Pickup", trip.startLocation || "N/A"],
-                ["Destination", trip.endLocation || "N/A"]
-            ],
-            [
-                ["Vehicle", vehicle],
-                ["Registration", registrationNumber]
-            ],
-            [
-                ["Starting Odometer", trip.startMeter ?? "N/A"],
-                ["Ending Odometer", trip.endMeter ?? "N/A"]
-            ],
-            [
-                ["Actual Distance", `${actualDistance.toLocaleString("en-IN")} km`],
-                ["Rate per KM", formatCurrency(rate)]
-            ]
-        ];
-
-        for (const row of tripRows) {
-            ensureSpace(11);
-
-            const firstHeight = drawLabelValue(
-                row[0][0],
-                row[0][1],
-                col1,
-                col1 + valueOffset,
-                valueWidth
-            );
-
-            const secondHeight = drawLabelValue(
-                row[1][0],
-                row[1][1],
-                col2,
-                col2 + valueOffset2,
-                valueWidth
-            );
-
-            y += Math.max(firstHeight, secondHeight) + 3;
-        }
-
-        y += 2;
-
-        // ---------- BILLING BREAKDOWN ----------
-        drawSectionTitle("Billing Breakdown");
-
-        const tableX = margin;
-        const tableW = contentWidth;
-        const labelX = tableX + 4;
-        const amountX = tableX + tableW - 4;
-
-        pdf.setFillColor(...lightGray);
-        pdf.roundedRect(tableX, y - 2, tableW, 9, 1, 1, "F");
-
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(8.5);
-        setText(navy);
-        pdf.text("DESCRIPTION", labelX, y + 3.5);
-        pdf.text("AMOUNT", amountX, y + 3.5, { align: "right" });
+        pdf.text("DESCRIPTION", M + 3, y + 2.5);
+        pdf.text("AMOUNT", W - M - 3, y + 2.5, {
+            align: "right"
+        });
 
         y += 12;
 
         pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(9);
-        setText(dark);
-        pdf.text(
-            `Trip distance charge (${actualDistance} km x ${formatCurrency(rate)}/km)`,
-            labelX,
-            y
-        );
-        pdf.text(formatCurrency(calculatedCharge), amountX, y, {
+        pdf.setFontSize(8.5);
+        setTextColor(C.text);
+
+        const chargeDescription = hasDistance && hasRate
+            ? `Completed trip charge (${distance} km x ${formatMoney(rate)}/km)`
+            : "Completed trip charge";
+
+        pdf.text(wrapText(chargeDescription, CW - 45), M + 3, y);
+        pdf.text(formatMoney(amount), W - M - 3, y, {
             align: "right"
         });
-
-        y += 5;
-        pdf.setDrawColor(...border);
-        pdf.line(tableX, y, tableX + tableW, y);
 
         y += 8;
-
-        // The stored invoice/trip total remains authoritative.
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(9);
-        setText(gray);
-        pdf.text("Subtotal", amountX - 52, y);
-        pdf.text(formatCurrency(calculatedCharge), amountX, y, {
-            align: "right"
-        });
-
+        setDrawColor(C.line);
+        pdf.line(M, y, W - M, y);
         y += 7;
-        pdf.text("Adjustments", amountX - 52, y);
-        pdf.text(
-            formatCurrency(finalAmount - calculatedCharge),
-            amountX,
-            y,
-            { align: "right" }
-        );
 
-        y += 3;
-        pdf.setDrawColor(...border);
-        pdf.line(amountX - 57, y, amountX, y);
+        // Only display configured tax data. No tax is inferred.
+        const taxLines = Array.isArray(invoice?.taxBreakdown)
+            ? invoice.taxBreakdown.filter(item =>
+                item &&
+                item.label &&
+                item.amount != null &&
+                Number.isFinite(Number(item.amount))
+            )
+            : [];
 
-        y += 9;
-        pdf.setFillColor(...navy);
-        pdf.roundedRect(tableX, y - 5, tableW, 17, 2, 2, "F");
+        for (const tax of taxLines) {
+            ensureSpace(8);
+
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(8.5);
+            setTextColor(C.muted);
+
+            pdf.text(String(tax.label), M + 3, y);
+            pdf.text(formatMoney(Number(tax.amount)), W - M - 3, y, {
+                align: "right"
+            });
+
+            y += 6;
+        }
+
+        ensureSpace(20);
 
         pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(10);
-        pdf.setTextColor(255, 255, 255);
-        pdf.text("TOTAL AMOUNT", tableX + 4, y + 1.5);
+        pdf.setFontSize(9);
+        setTextColor(C.navy);
+        pdf.text("TOTAL INVOICE AMOUNT", M + 3, y + 2);
 
-        pdf.setFontSize(13);
-        pdf.text(formatCurrency(finalAmount), amountX - 4, y + 1.5, {
+        setFillColor(C.navy);
+        pdf.roundedRect(W / 2, y - 2, W / 2 - M, 13, 2, 2, "F");
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(11);
+        setTextColor(C.white);
+        pdf.text(formatMoney(amount), W - M - 4, y + 6.5, {
             align: "right"
         });
 
         y += 20;
 
-        // ---------- PAYMENT STATUS ----------
-        drawSectionTitle("Payment Information");
+        // --------------------------------------------------
+        // PAYMENT INFORMATION
+        // --------------------------------------------------
+        drawSection("Payment Information");
+
+        drawField("PAYMENT STATUS", "", M + 2, y, 55);
+        drawStatusBadge(paymentStatus, M + 2, y + 8, 48);
+        y += 15;
+
+        if (payment?.razorpayOrderId) {
+            const height = drawField(
+                "RAZORPAY ORDER ID",
+                payment.razorpayOrderId,
+                M + 2,
+                y,
+                CW - 5
+            );
+            y += height + 3;
+        }
+
+        if (payment?.razorpayPaymentId) {
+            const height = drawField(
+                "RAZORPAY PAYMENT ID",
+                payment.razorpayPaymentId,
+                M + 2,
+                y,
+                CW - 5
+            );
+            y += height + 3;
+        }
+
+        if (!payment?.razorpayOrderId && !payment?.razorpayPaymentId) {
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(8);
+            setTextColor(C.muted);
+            pdf.text(
+                "Razorpay payment reference is not available in the current records.",
+                M + 2,
+                y
+            );
+            y += 6;
+        }
 
         const isPaid = paymentStatus === "PAID";
 
+        ensureSpace(12);
         pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(9);
-        setText(gray);
-        pdf.text("Payment Status", margin + 2, y + 1);
+        pdf.setFontSize(8);
+        setTextColor(isPaid ? C.green : C.text);
 
-        const badgeText = paymentStatus.replace(/_/g, " ");
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(8.5);
-
-        const badgeWidth = pdf.getTextWidth(badgeText) + 10;
-        pdf.setFillColor(
-            ...(isPaid ? [225, 247, 235] : [255, 242, 220])
+        pdf.text(
+            isPaid
+                ? "Payment is marked PAID in FleetFlow records."
+                : "If payment is due, open FleetFlow Billing and select Pay Now to complete checkout.",
+            M + 2,
+            y,
+            { maxWidth: CW - 4 }
         );
-        pdf.roundedRect(margin + 39, y - 4, badgeWidth, 8, 2, 2, "F");
-
-        setText(isPaid ? green : red);
-        pdf.text(badgeText, margin + 44, y + 1);
 
         y += 11;
 
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(8);
-        setText(gray);
-        pdf.text(
-            isPaid
-                ? "Payment is recorded as paid in FleetFlow."
-                : "Payment is not marked as paid in FleetFlow.",
-            margin + 2,
-            y
-        );
+        // --------------------------------------------------
+        // TERMS AND PAYMENT INSTRUCTIONS
+        // --------------------------------------------------
+        drawSection("Invoice Terms & Payment Instructions");
 
-        y += 14;
+        const terms = [
+            "This invoice is generated from the completed trip and available FleetFlow billing records.",
+            "Please verify the trip route, vehicle, distance and billed amount.",
+            "For unpaid invoices, use the Pay Now option in FleetFlow Billing to complete payment securely.",
+            "Keep the invoice number and any available Razorpay reference for payment enquiries.",
+            "Payment status displayed here reflects the current FleetFlow invoice/payment records."
+        ];
 
-        // ---------- SIGNATURES ----------
-        ensureSpace(32);
-        drawSectionTitle("Acknowledgement & Authorization");
+        for (const term of terms) {
+            const lines = wrapText("- " + term, CW - 5);
+            const height = lines.length * 4 + 2;
 
-        const signatureGap = 15;
-        const signatureWidth = (contentWidth - signatureGap) / 2;
-        const signatureY = y + 13;
+            ensureSpace(height);
 
-        pdf.setDrawColor(...gray);
-        pdf.line(
-            margin + 2,
-            signatureY,
-            margin + 2 + signatureWidth - 5,
-            signatureY
-        );
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(8);
+            setTextColor(C.text);
 
-        pdf.line(
-            margin + signatureWidth + signatureGap,
-            signatureY,
-            pageWidth - margin - 2,
-            signatureY
-        );
+            pdf.text(lines, M + 2, y);
+            y += height;
+        }
+
+        y += 3;
+
+        // --------------------------------------------------
+        // CUSTOMER ACKNOWLEDGEMENT AND SIGNATURES
+        // --------------------------------------------------
+        drawSection("Customer Acknowledgement & Authorization");
+
+        ensureSpace(29);
+
+        const gap = 12;
+        const sigWidth = (CW - gap) / 2;
+        const leftX = M + 2;
+        const rightX = M + sigWidth + gap;
+        const sigY = y + 12;
+
+        setDrawColor(C.muted);
+        pdf.setLineWidth(0.3);
+
+        pdf.line(leftX, sigY, leftX + sigWidth - 4, sigY);
+        pdf.line(rightX, sigY, W - M - 2, sigY);
 
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(8);
-        setText(dark);
-        pdf.text("Customer Acknowledgement", margin + 2, signatureY + 5);
-        pdf.text(
-            "Authorized Signature",
-            margin + signatureWidth + signatureGap,
-            signatureY + 5
-        );
+        setTextColor(C.text);
+
+        pdf.text("Customer Signature", leftX, sigY + 5);
+        pdf.text("Authorized Representative", rightX, sigY + 5);
 
         pdf.setFont("helvetica", "normal");
         pdf.setFontSize(7.5);
-        setText(gray);
-        pdf.text("Name / Date", margin + 2, signatureY + 10);
-        pdf.text("FleetFlow Representative / Date",
-            margin + signatureWidth + signatureGap,
-            signatureY + 10
-        );
+        setTextColor(C.muted);
 
-        // ---------- FOOTER ----------
-        const footerY = pageHeight - 12;
+        pdf.text("Name / Date", leftX, sigY + 10);
+        pdf.text("Name / Date", rightX, sigY + 10);
 
-        pdf.setDrawColor(...border);
-        pdf.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
+        // Add a footer to every page, including any continuation pages.
+        const totalPages = pdf.internal.getNumberOfPages();
 
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(7.5);
-        setText(gray);
-        pdf.text(
-            "FleetFlow | Fleet & Vehicle Management System",
-            margin,
-            footerY
-        );
-        pdf.text(
-            "Generated electronically",
-            pageWidth - margin,
-            footerY,
-            { align: "right" }
-        );
+        for (let page = 1; page <= totalPages; page++) {
+            pdf.setPage(page);
+            drawFooter();
+        }
 
         const safeName = String(invoiceNumber)
             .replace(/[^a-zA-Z0-9_-]/g, "_");
 
-        pdf.save(`${safeName}.pdf`);
+        pdf.save(`FleetFlow_${safeName}.pdf`);
 
     } catch (error) {
         console.error("Invoice PDF generation failed:", error);
@@ -2152,10 +2401,775 @@ function escapeJs(value) {
         .replace(/\n/g, "\\n");
 }
 
+
+
+/* =========================================================
+   AI FLEET ANALYTICS
+   Uses existing CAP AdminService endpoints.
+   ========================================================= */
+
+let fleetAnalyticsData = {
+    trips: [],
+    vehicles: [],
+    drivers: []
+};
+
+async function loadFleetAnalytics() {
+    const message = document.getElementById("analyticsMessage");
+    const summary = document.getElementById("analyticsSummary");
+    const insights = document.getElementById("analyticsInsights");
+
+    if (!message || !summary || !insights) {
+        console.error("Analytics HTML elements are missing.");
+        return;
+    }
+
+    message.textContent = "Loading fleet data...";
+    insights.innerHTML = "<p>Analyzing fleet activity...</p>";
+
+    try {
+        // Restrict this dashboard to administrators.
+        if (!currentUser || currentUser.role !== "ADMIN") {
+            throw new Error("Only administrators can access fleet analytics.");
+        }
+
+        const [tripResponse, vehicleResponse, driverResponse] =
+            await Promise.all([
+                apiRequest(`${API_BASE}/admin/Trips?$top=5000`),
+                apiRequest(`${API_BASE}/admin/Vehicles?$top=5000`),
+                apiRequest(`${API_BASE}/admin/Drivers?$top=5000`)
+            ]);
+
+        fleetAnalyticsData = {
+            trips: tripResponse?.value || [],
+            vehicles: vehicleResponse?.value || [],
+            drivers: driverResponse?.value || []
+        };
+
+        renderFleetAnalytics();
+
+        message.textContent =
+            `Analytics updated successfully. ` +
+            `${fleetAnalyticsData.trips.length} trips, ` +
+            `${fleetAnalyticsData.vehicles.length} vehicles and ` +
+            `${fleetAnalyticsData.drivers.length} drivers loaded.`;
+
+    } catch (error) {
+        console.error("Fleet analytics failed:", error);
+        message.textContent = `Unable to load analytics: ${error.message}`;
+        summary.innerHTML = `
+            <div class="stat-card">
+                <span class="stat-title">Analytics Status</span>
+                <strong>Unavailable</strong>
+            </div>
+        `;
+        insights.innerHTML =
+            "<p>Check the AdminService endpoints and try refreshing.</p>";
+    }
+}
+
+
+async function askFleetAnalytics() {
+    const questionInput = document.getElementById("analyticsQuestion");
+    const answerBox = document.getElementById("analyticsAnswer");
+
+    if (!questionInput || !answerBox) return;
+
+    const question = questionInput.value.trim();
+
+    if (!question) {
+        answerBox.textContent =
+            "Please enter a question about your fleet.";
+        answerBox.classList.remove("hidden");
+        return;
+    }
+
+    if (!currentUser || currentUser.role !== "ADMIN") {
+        answerBox.textContent =
+            "Administrator access is required.";
+        answerBox.classList.remove("hidden");
+        return;
+    }
+
+    answerBox.textContent =
+        "FleetFlow AI is analyzing live fleet data...";
+    answerBox.classList.remove("hidden");
+
+    try {
+        // Send only the question.
+        // Fleet statistics will be retrieved by the backend.
+        const result = await apiRequest("/api/fleet-ai/ask", {
+            method: "POST",
+            body: JSON.stringify({ question })
+        });
+
+        if (!result || !result.answer) {
+            throw new Error("The AI service returned no answer.");
+        }
+
+        answerBox.innerHTML = renderFleetAIAnswer(result.answer);
+
+    } catch (error) {
+        console.error("FleetFlow AI request failed:", error);
+
+        answerBox.textContent =
+            "Unable to get an AI response. Please try again.";
+    }
+}
+
+function formatAnalyticsNumber(value) {
+    return Number(value || 0).toLocaleString("en-IN", {
+        maximumFractionDigits: 2
+    });
+}
+
+
+function renderFleetAnalytics() {
+    const summary = document.getElementById("analyticsSummary");
+    const insights = document.getElementById("analyticsInsights");
+
+    if (!summary || !insights) {
+        console.error("Analytics summary or insights element is missing.");
+        return;
+    }
+
+    const { trips, vehicles, drivers } = fleetAnalyticsData;
+
+    const completed = trips.filter(
+        trip => trip.status === "COMPLETED"
+    );
+
+    const pending = trips.filter(trip =>
+        ["PENDING_CONFIRMATION", "PENDING"].includes(trip.status)
+    );
+
+    const rejected = trips.filter(
+        trip => trip.status === "REJECTED"
+    );
+
+    const availableVehicles = vehicles.filter(
+        vehicle => vehicle.status === "AVAILABLE"
+    );
+
+    const activeDrivers = drivers.filter(
+        driver => driver.status === "ACTIVE"
+    );
+
+    const availableDrivers = drivers.filter(
+        driver => driver.availabilityStatus === "AVAILABLE"
+    );
+
+    const completedWithDistance = completed.filter(
+        trip => trip.actualDistance != null &&
+            Number.isFinite(Number(trip.actualDistance))
+    );
+
+    const completedWithPrice = completed.filter(
+        trip => trip.finalPrice != null &&
+            Number.isFinite(Number(trip.finalPrice))
+    );
+
+    const totalDistance = completedWithDistance.reduce(
+        (sum, trip) => sum + Number(trip.actualDistance),
+        0
+    );
+
+    const totalCharges = completedWithPrice.reduce(
+        (sum, trip) => sum + Number(trip.finalPrice),
+        0
+    );
+
+    const averageCharge = completedWithPrice.length
+        ? totalCharges / completedWithPrice.length
+        : 0;
+
+    summary.innerHTML = `
+        <div class="stat-card">
+            <span class="stat-title">Total Trips</span>
+            <strong>${formatAnalyticsNumber(trips.length)}</strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-title">Completed Trips</span>
+            <strong>${formatAnalyticsNumber(completed.length)}</strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-title">Pending Trips</span>
+            <strong>${formatAnalyticsNumber(pending.length)}</strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-title">Rejected Trips</span>
+            <strong>${formatAnalyticsNumber(rejected.length)}</strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-title">Total Vehicles</span>
+            <strong>${formatAnalyticsNumber(vehicles.length)}</strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-title">Available Vehicles</span>
+            <strong>${formatAnalyticsNumber(availableVehicles.length)}</strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-title">Total Drivers</span>
+            <strong>${formatAnalyticsNumber(drivers.length)}</strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-title">Active Drivers</span>
+            <strong>${formatAnalyticsNumber(activeDrivers.length)}</strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-title">Available Drivers</span>
+            <strong>${formatAnalyticsNumber(availableDrivers.length)}</strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-title">Completed Distance</span>
+            <strong>${formatAnalyticsNumber(totalDistance)} KM</strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-title">Final Trip Charges</span>
+            <strong>${escapeHtml(formatCurrency(totalCharges))}</strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-title">Average Recorded Trip Charge</span>
+            <strong>${escapeHtml(formatCurrency(averageCharge))}</strong>
+        </div>
+    `;
+
+    insights.innerHTML = `
+        <div class="welcome-card">
+            <h3>Fleet Overview</h3>
+            <p>
+                ${formatAnalyticsNumber(completed.length)} of
+                ${formatAnalyticsNumber(trips.length)} trips are completed.
+            </p>
+            <p>
+                ${formatAnalyticsNumber(pending.length)} trips are awaiting
+                confirmation or remain pending.
+            </p>
+            <p>
+                ${formatAnalyticsNumber(availableVehicles.length)} of
+                ${formatAnalyticsNumber(vehicles.length)} vehicles are available.
+            </p>
+            <p>
+                ${formatAnalyticsNumber(activeDrivers.length)} drivers are active,
+                and ${formatAnalyticsNumber(availableDrivers.length)}
+                are marked available.
+            </p>
+            <p>
+                Distance totals include completed trips with recorded
+                odometer distance. Charge totals include completed trips
+                with recorded final charges.
+            </p>
+        </div>
+    `;
+}
+
+
+function renderFleetAIAnswer(text) {
+    // Escape HTML before formatting AI-generated content.
+    const escape = value => String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[char]);
+
+    const lines = escape(text).split(/\r?\n/);
+    let html = "";
+    let inList = false;
+
+    const closeList = () => {
+        if (inList) {
+            html += "</ul>";
+            inList = false;
+        }
+    };
+
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+
+        if (!line) {
+            closeList();
+            continue;
+        }
+
+        // Support Markdown bold.
+        const formatted = line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+        // Render headings.
+        if (/^#{1,3}\s/.test(line)) {
+            closeList();
+            html += `<h3>${formatted.replace(/^#{1,3}\s/, "")}</h3>`;
+            continue;
+        }
+
+        // Render bullet points.
+        if (/^[-*•]\s/.test(line)) {
+            if (!inList) {
+                html += '<ul class="fleet-ai-list">';
+                inList = true;
+            }
+
+            html += `<li>${formatted.replace(/^[-*•]\s/, "")}</li>`;
+            continue;
+        }
+
+        closeList();
+
+        // Render Markdown table rows as readable rows.
+        if (line.startsWith("|") && line.endsWith("|")) {
+            const cells = line.slice(1, -1).split("|").map(cell => cell.trim());
+
+            if (cells.every(cell => /^:?-{3,}:?$/.test(cell))) {
+                continue;
+            }
+
+            html += `<div class="fleet-ai-table-row">${
+                cells.map(cell => `<span>${cell}</span>`).join("")
+            }</div>`;
+            continue;
+        }
+
+        html += `<p>${formatted}</p>`;
+    }
+
+    closeList();
+    return `<div class="fleet-ai-response">${html}</div>`;
+}
+
+
+
+/* =========================================================
+   FLEET TRACKING MAP
+   Displays recorded trip coordinates.
+   Admin-only; uses the existing authenticated API helper.
+   ========================================================= */
+
+let fleetTrackingMap = null;
+let fleetTrackingLayer = null;
+
+function initializeFleetTrackingMap() {
+    const mapElement = document.getElementById("fleetTrackingMap");
+
+    if (!mapElement) {
+        throw new Error("Fleet tracking map container is missing from index.html.");
+    }
+
+    if (typeof L === "undefined") {
+        throw new Error(
+            "Leaflet did not load. Check the Leaflet CSS and JS script tags in index.html."
+        );
+    }
+
+    if (!fleetTrackingMap) {
+        fleetTrackingMap = L.map("fleetTrackingMap").setView(
+            [20.5937, 78.9629],
+            5
+        );
+
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: "&copy; OpenStreetMap contributors"
+        }).addTo(fleetTrackingMap);
+
+        fleetTrackingLayer = L.featureGroup().addTo(fleetTrackingMap);
+    }
+
+    // The page may have been hidden when the map was initialized.
+    setTimeout(() => {
+        if (fleetTrackingMap) {
+            fleetTrackingMap.invalidateSize();
+        }
+    }, 100);
+}
+
+function isValidCoordinate(latitude, longitude) {
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+
+    return latitude !== null &&
+        latitude !== undefined &&
+        longitude !== null &&
+        longitude !== undefined &&
+        String(latitude).trim() !== "" &&
+        String(longitude).trim() !== "" &&
+        Number.isFinite(lat) &&
+        Number.isFinite(lng) &&
+        lat >= -90 && lat <= 90 &&
+        lng >= -180 && lng <= 180;
+}
+
+function getTrackingVehicleName(trip, vehicles) {
+    const vehicle = vehicles.find(
+        item => item.ID === trip.vehicle_ID
+    ) || trip.vehicle || {};
+
+    const name = [
+        vehicle.brand || "",
+        vehicle.model || ""
+    ].join(" ").trim();
+
+    return name || vehicle.registrationNumber || "Vehicle details unavailable";
+}
+
+function renderFleetTracking(trips, vehicles) {
+    initializeFleetTrackingMap();
+
+    fleetTrackingLayer.clearLayers();
+
+    const routeTrips = trips.filter(trip =>
+        isValidCoordinate(trip.startLatitude, trip.startLongitude) &&
+        isValidCoordinate(trip.endLatitude, trip.endLongitude)
+    );
+
+    const summary = document.getElementById("fleetTrackingSummary");
+    const list = document.getElementById("fleetTrackingList");
+    const message = document.getElementById("fleetTrackingMessage");
+
+    const uniqueVehicles = new Set(
+        trips.map(trip => trip.vehicle_ID).filter(Boolean)
+    );
+
+    summary.innerHTML = `
+        <div class="stat-card">
+            <span class="stat-title">Total Vehicles</span>
+            <strong>${uniqueVehicles.size}</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-title">Trips with Coordinates</span>
+            <strong>${routeTrips.length}</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-title">Recorded Routes</span>
+            <strong>${routeTrips.length}</strong>
+        </div>
+    `;
+
+    if (routeTrips.length === 0) {
+        message.textContent =
+            "No trips currently contain valid start and destination coordinates.";
+
+        list.innerHTML = `
+            <p>
+                Add valid startLatitude, startLongitude, endLatitude and
+                endLongitude values to a trip to display its route.
+            </p>
+        `;
+        fleetTrackingMap.setView([20.5937, 78.9629], 5);
+        return;
+    }
+
+    const allCoordinates = [];
+
+    routeTrips.forEach(trip => {
+        const start = [
+            Number(trip.startLatitude),
+            Number(trip.startLongitude)
+        ];
+
+        const end = [
+            Number(trip.endLatitude),
+            Number(trip.endLongitude)
+        ];
+
+        const vehicleName = getTrackingVehicleName(trip, vehicles);
+        const status = trip.status || "UNKNOWN";
+
+        const routeLine = L.polyline([start, end], {
+            color: status === "IN_PROGRESS" ? "#16a34a" : "#2563eb",
+            weight: 4,
+            opacity: 0.8
+        }).addTo(fleetTrackingLayer);
+
+        routeLine.bindPopup(`
+            <strong>${escapeHtml(vehicleName)}</strong><br>
+            Trip status: ${escapeHtml(status.replace(/_/g, " "))}<br>
+            From: ${escapeHtml(trip.startLocation || "-")}<br>
+            To: ${escapeHtml(trip.endLocation || "-")}
+        `);
+
+        L.marker(start).addTo(fleetTrackingLayer)
+            .bindPopup(`
+                <strong>Start</strong><br>
+                ${escapeHtml(trip.startLocation || "-")}<br>
+                ${escapeHtml(vehicleName)}
+            `);
+
+        L.marker(end).addTo(fleetTrackingLayer)
+            .bindPopup(`
+                <strong>Destination</strong><br>
+                ${escapeHtml(trip.endLocation || "-")}<br>
+                ${escapeHtml(vehicleName)}
+            `);
+
+        allCoordinates.push(start, end);
+    });
+
+    fleetTrackingMap.fitBounds(allCoordinates, {
+        padding: [30, 30],
+        maxZoom: 12
+    });
+
+    message.textContent =
+        `Showing ${routeTrips.length} recorded route(s). ` +
+        "These are trip coordinates, not live GPS positions.";
+
+    list.innerHTML = routeTrips.map(trip => `
+        <div class="vehicle-card">
+            <h3>
+                ${escapeHtml(trip.startLocation || "-")}
+                &rarr;
+                ${escapeHtml(trip.endLocation || "-")}
+            </h3>
+            <p><strong>Vehicle:</strong>
+                ${escapeHtml(getTrackingVehicleName(trip, vehicles))}
+            </p>
+            <p><strong>Trip date:</strong>
+                ${escapeHtml(trip.tripDate || "-")}
+            </p>
+            <p><strong>Status:</strong>
+                ${escapeHtml((trip.status || "UNKNOWN").replace(/_/g, " "))}
+            </p>
+        </div>
+    `).join("");
+}
+
+async function loadFleetTracking() {
+    const message = document.getElementById("fleetTrackingMessage");
+    const summary = document.getElementById("fleetTrackingSummary");
+    const list = document.getElementById("fleetTrackingList");
+
+    if (!message || !summary || !list) {
+        console.error("Fleet tracking HTML elements are missing.");
+        return;
+    }
+
+    if (!currentUser || currentUser.role !== "ADMIN") {
+        message.textContent =
+            "Administrator access is required to view fleet tracking.";
+        return;
+    }
+
+    message.textContent = "Loading fleet tracking data...";
+    list.innerHTML = "<p>Loading trip locations...</p>";
+
+    try {
+        const [tripResponse, vehicleResponse] = await Promise.all([
+            apiRequest(`${API_BASE}/admin/Trips?$top=5000`),
+            apiRequest(`${API_BASE}/admin/Vehicles?$top=5000`)
+        ]);
+
+        const trips = tripResponse?.value || [];
+        const vehicles = vehicleResponse?.value || [];
+
+        renderFleetTracking(trips, vehicles);
+    } catch (error) {
+        console.error("Fleet tracking failed:", error);
+
+        message.textContent =
+            `Unable to load fleet tracking: ${error.message}`;
+
+        summary.innerHTML = "";
+        list.innerHTML = "<p>Could not load trip locations. Please try again.</p>";
+    }
+}
+
+/* =========================================================
+   TRIP LOCATION SEARCH
+   ========================================================= */
+
+let selectedTripStartLocation = null;
+let selectedTripEndLocation = null;
+
+const locationSearchTimers = {};
+
+function showLocationMessage(list, message) {
+    list.innerHTML = "";
+
+    const item = document.createElement("div");
+    item.className = "location-suggestion-message";
+    item.textContent = message;
+
+    list.appendChild(item);
+    list.classList.remove("hidden");
+}
+
+function setupTripLocationSearch(inputId, listId, selectedId, type) {
+    const input = document.getElementById(inputId);
+    const list = document.getElementById(listId);
+    const selectedLabel = document.getElementById(selectedId);
+
+    if (!input || !list || !selectedLabel) {
+        console.error("Location search elements not found:", inputId);
+        return;
+    }
+
+    input.addEventListener("input", function () {
+        const query = input.value.trim();
+
+        // Clear any previously selected coordinates.
+        if (type === "start") {
+            selectedTripStartLocation = null;
+        } else {
+            selectedTripEndLocation = null;
+        }
+
+        selectedLabel.textContent =
+            "Select a location from the search results.";
+        selectedLabel.classList.remove("is-selected");
+
+        clearTimeout(locationSearchTimers[type]);
+        list.classList.add("hidden");
+
+        if (query.length < 3) {
+            return;
+        }
+
+        locationSearchTimers[type] = setTimeout(async function () {
+            showLocationMessage(list, "Searching locations...");
+
+            try {
+                const url =
+                    "https://nominatim.openstreetmap.org/search" +
+                    "?format=jsonv2&limit=5&countrycodes=in&q=" +
+                    encodeURIComponent(query);
+
+                const response = await fetch(url, {
+                    headers: {
+                        "Accept": "application/json"
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error("Location service unavailable.");
+                }
+
+                const places = await response.json();
+
+                // Ignore results if the input has changed.
+                if (input.value.trim() !== query) {
+                    return;
+                }
+
+                list.innerHTML = "";
+
+                if (!places.length) {
+                    showLocationMessage(list, "No matching places found.");
+                    return;
+                }
+
+                places.forEach(function (place) {
+                    const item = document.createElement("button");
+
+                    item.type = "button";
+                    item.className = "location-suggestion-item";
+                    item.setAttribute("role", "option");
+                    item.textContent = place.display_name;
+
+                    item.addEventListener("click", function () {
+                        const chosenPlace = {
+                            name: place.display_name,
+                            latitude: Number(place.lat),
+                            longitude: Number(place.lon)
+                        };
+
+                        input.value = place.display_name;
+
+                        if (type === "start") {
+                            selectedTripStartLocation = chosenPlace;
+                        } else {
+                            selectedTripEndLocation = chosenPlace;
+                        }
+
+                        selectedLabel.textContent =
+                            "✓ Location selected";
+                        selectedLabel.classList.add("is-selected");
+
+                        list.classList.add("hidden");
+                        list.innerHTML = "";
+                    });
+
+                    list.appendChild(item);
+                });
+
+                list.classList.remove("hidden");
+
+            } catch (error) {
+                console.error("Location search failed:", error);
+                showLocationMessage(
+                    list,
+                    "Could not load locations. Please try again."
+                );
+            }
+        }, 1000);
+    });
+
+    input.addEventListener("focus", function () {
+        if (input.value.trim().length >= 3 &&
+            !selectedLocationForType(type)) {
+            input.dispatchEvent(new Event("input"));
+        }
+    });
+
+    input.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+            list.classList.add("hidden");
+        }
+    });
+
+    document.addEventListener("click", function (event) {
+        if (!event.target.closest(".location-search-group")) {
+            list.classList.add("hidden");
+        }
+    });
+}
+
+function selectedLocationForType(type) {
+    return type === "start"
+        ? selectedTripStartLocation
+        : selectedTripEndLocation;
+}
+
+function initializeTripLocationSearch() {
+    setupTripLocationSearch(
+        "tripStartLocation",
+        "tripStartSuggestions",
+        "tripStartSelected",
+        "start"
+    );
+
+    setupTripLocationSearch(
+        "tripEndLocation",
+        "tripEndSuggestions",
+        "tripEndSelected",
+        "end"
+    );
+}
+
+document.addEventListener(
+    "DOMContentLoaded",
+    initializeTripLocationSearch
+);
 /* =========================================================
    START APPLICATION
    ========================================================= */
 
 document.addEventListener("DOMContentLoaded", function () {
     restoreSession();
+
+    // If no valid session was restored, show the public landing page
+    if (!currentUser) {
+        showLandingPage();
+    }
 });

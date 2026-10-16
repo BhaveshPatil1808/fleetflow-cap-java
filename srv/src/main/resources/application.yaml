@@ -1,6 +1,7 @@
 razorpay:
-  key-id: rzp_test_TngTHpNGuX9eyW
-  key-secret: nbAdn29sz8i2GU8IOVe0trQU
+  key-id: rzp_test_ToANC4x8QzI3am
+  key-secret: BsO83nsOl2FMJP5F3guswBYr
+GROQ_API_KEY: ${GROQ_API_KEY}
 spring:
   config:
     activate:
